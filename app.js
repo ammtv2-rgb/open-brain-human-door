@@ -1,7 +1,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-const SUPABASE_URL = 'https://whotwmofqunhxxbrdvpo.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_muNMrMjZDHYxT616JNJZHQ_YErEnvUS';
+const SUPABASE_URL = 'PASTE_YOUR_EXISTING_SUPABASE_URL_HERE';
+const SUPABASE_KEY = 'PASTE_YOUR_EXISTING_PUBLISHABLE_KEY_HERE';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -57,9 +57,9 @@ function matchesSearch(row, term) {
 
   const combined = [
     row.content || '',
-    ...(safeArray(row.people)),
-    ...(safeArray(row.topics)),
-    ...(safeArray(row.action_items)),
+    ...safeArray(row.people),
+    ...safeArray(row.topics),
+    ...safeArray(row.action_items),
     row.type || ''
   ].join(' ').toLowerCase();
 
@@ -166,7 +166,7 @@ async function loadMemories() {
 
   const { data, error } = await supabase
     .from('memories')
-    .select('id, uuid, created_at, content, people, topics, action_items, type')
+    .select('id, created_at, content, people, topics, action_items, type')
     .order('created_at', { ascending: false })
     .limit(200);
 
