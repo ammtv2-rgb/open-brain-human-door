@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Open Brain Human Door</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <h1>Open Brain</h1>
+      <p class="subtitle">Morning scan for your public.memories table</p>
+    </header>
+
+    <section class="search-wrap">
+      <input
+        id="searchInput"
+        type="text"
+        placeholder="Search anything: thoughts, people, topics, action items..."
+      />
+    </section>
+
+    <section class="summary-strip">
+      <div class="summary-card accent-orange">
+        <div class="summary-label">Open loops</div>
+        <div class="summary-value" id="openLoopsCount">0</div>
+      </div>
+      <div class="summary-card accent-blue">
+        <div class="summary-label">Total shown</div>
+        <div class="summary-value" id="shownCount">0</div>
+      </div>
+    </section>
+
+    <section class="priority-section">
+      <div class="section-header">
+        <h2>Open action items</h2>
+        <button id="refreshBtn" class="ghost-btn">Refresh</button>
+      </div>
+      <div id="priorityList" class="card-list"></div>
+    </section>
+
+    <section class="all-section">
+      <div class="section-header">
+        <h2>All memories</h2>
+      </div>
+      <div id="memoryList" class="card-list"></div>
+    </section>
+  </div>
+
+  <div id="editModal" class="modal hidden">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h3>Edit memory</h3>
+        <button id="closeModalBtn" class="icon-btn">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <label>Content</label>
+        <textarea id="editContent" rows="5"></textarea>
+
+        <label>People (comma separated)</label>
+        <input id="editPeople" type="text" />
+
+        <label>Topics (comma separated)</label>
+        <input id="editTopics" type="text" />
+
+        <label>Action items (comma separated)</label>
+        <textarea id="editActionItems" rows="3"></textarea>
+
+        <label>Type</label>
+        <input id="editType" type="text" />
+      </div>
+
+      <div class="modal-footer">
+        <button id="saveBtn" class="primary-btn">Save changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
