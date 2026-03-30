@@ -228,7 +228,6 @@ async function saveChanges() {
 
 async function saveQuickMemory() {
   const captureTextarea = document.getElementById('quickCaptureInput');
-  const captureType = document.getElementById('quickCaptureType');
   const quickSaveBtn = document.getElementById('quickSaveBtn');
 
   if (!captureTextarea || !quickSaveBtn) return;
@@ -239,14 +238,11 @@ async function saveQuickMemory() {
   quickSaveBtn.textContent = 'Saving...';
   quickSaveBtn.disabled = true;
 
-  // 🔥 BASIC AI-LIKE EXTRACTION (rule-based for now)
-
   let detectedType = 'note';
   let actionItems = [];
 
   const lower = rawText.toLowerCase();
 
-  // detect task language
   if (
     lower.includes('need to') ||
     lower.includes('have to') ||
@@ -254,59 +250,31 @@ async function saveQuickMemory() {
     lower.includes('pay') ||
     lower.includes('call') ||
     lower.includes('follow up') ||
-    lower.includes('schedule')
+    lower.includes('schedule') ||
+    lower.includes('transfer') ||
+    lower.includes('deposit')
   ) {
     detectedType = 'task';
 
-    // split into rough action items
     actionItems = rawText
       .split(/\.|,|and/i)
       .map(s => s.trim())
+      .filter(Boolean)
       .filter(s =>
         s.toLowerCase().includes('pay') ||
         s.toLowerCase().includes('call') ||
         s.toLowerCase().includes('need') ||
         s.toLowerCase().includes('deposit') ||
-        s.toLowerCase().includes('transfer')
+        s.toLowerCase().includes('transfer') ||
+        s.toLowerCase().includes('follow up') ||
+        s.toLowerCase().includes('schedule')
       );
   }
 
   const payload = {
     content: rawText,
-    type: captureType ? captureType.value : detectedType,
+    type: detectedType,
     action_items: actionItems
-  };
-
-  const { error } = await supabase
-    .from('memories')
-    .insert([payload]);
-
-  quickSaveBtn.textContent = 'Save Memory';
-  quickSaveBtn.disabled = false;
-
-  if (error) {
-    alert(`Could not save memory: ${error.message}`);
-    return;
-  }
-
-  captureTextarea.value = '';
-  await loadMemories();
-}
-  const captureTextarea = document.getElementById('quickCaptureInput');
-  const captureType = document.getElementById('quickCaptureType');
-  const quickSaveBtn = document.getElementById('quickSaveBtn');
-
-  if (!captureTextarea || !quickSaveBtn) return;
-
-  const value = captureTextarea.value.trim();
-  if (!value) return;
-
-  quickSaveBtn.textContent = 'Saving...';
-  quickSaveBtn.disabled = true;
-
-  const payload = {
-    content: value,
-    type: captureType ? captureType.value : 'note'
   };
 
   const { error } = await supabase
