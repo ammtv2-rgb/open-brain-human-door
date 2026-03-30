@@ -233,6 +233,71 @@ async function saveQuickMemory() {
 
   if (!captureTextarea || !quickSaveBtn) return;
 
+  const rawText = captureTextarea.value.trim();
+  if (!rawText) return;
+
+  quickSaveBtn.textContent = 'Saving...';
+  quickSaveBtn.disabled = true;
+
+  // 🔥 BASIC AI-LIKE EXTRACTION (rule-based for now)
+
+  let detectedType = 'note';
+  let actionItems = [];
+
+  const lower = rawText.toLowerCase();
+
+  // detect task language
+  if (
+    lower.includes('need to') ||
+    lower.includes('have to') ||
+    lower.includes('must') ||
+    lower.includes('pay') ||
+    lower.includes('call') ||
+    lower.includes('follow up') ||
+    lower.includes('schedule')
+  ) {
+    detectedType = 'task';
+
+    // split into rough action items
+    actionItems = rawText
+      .split(/\.|,|and/i)
+      .map(s => s.trim())
+      .filter(s =>
+        s.toLowerCase().includes('pay') ||
+        s.toLowerCase().includes('call') ||
+        s.toLowerCase().includes('need') ||
+        s.toLowerCase().includes('deposit') ||
+        s.toLowerCase().includes('transfer')
+      );
+  }
+
+  const payload = {
+    content: rawText,
+    type: captureType ? captureType.value : detectedType,
+    action_items: actionItems
+  };
+
+  const { error } = await supabase
+    .from('memories')
+    .insert([payload]);
+
+  quickSaveBtn.textContent = 'Save Memory';
+  quickSaveBtn.disabled = false;
+
+  if (error) {
+    alert(`Could not save memory: ${error.message}`);
+    return;
+  }
+
+  captureTextarea.value = '';
+  await loadMemories();
+}
+  const captureTextarea = document.getElementById('quickCaptureInput');
+  const captureType = document.getElementById('quickCaptureType');
+  const quickSaveBtn = document.getElementById('quickSaveBtn');
+
+  if (!captureTextarea || !quickSaveBtn) return;
+
   const value = captureTextarea.value.trim();
   if (!value) return;
 
