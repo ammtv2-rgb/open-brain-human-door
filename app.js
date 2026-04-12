@@ -379,8 +379,10 @@ function injectCaptureBox() {
 }
 
 if (searchInput) {
-  searchInput.addEventListener('input', async () => {
-    await runAISearch(searchInput.value);
+  searchInput.addEventListener('keydown', async (event) => {
+    if (event.key === 'Enter') {
+      await runAISearch(searchInput.value);
+    }
   });
 }
 if (refreshBtn) refreshBtn.addEventListener('click', loadMemories);
