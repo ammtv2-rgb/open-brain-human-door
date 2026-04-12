@@ -53,19 +53,37 @@ function hasOpenActionItems(row) {
   return safeArray(row.action_items).length > 0;
 }
 
-function matchesSearch(row, term) {
-  if (!term) return true;
-  const q = term.toLowerCase();
+async function runAISearch(query) {
+  try {
+    const q = (query || '').trim();
 
-  const combined = [
-    row.content || '',
-    ...safeArray(row.people),
-    ...safeArray(row.topics),
-    ...safeArray(row.action_items),
-    row.type || ''
-  ].join(' ').toLowerCase();
+    if (!q) {
+      await loadMemories();
+      return;
+    }
 
-  return combined.includes(q);
+    const { data, error } = await supabase.functions.invoke('search-memory', {
+      body: { query: q }
+    });
+
+    if (error) {
+      console.error('AI search error:', error);
+      alert('AI search failed. Check console for details.');
+      return;
+    }
+
+    const results = Array.isArray(data) ? data : (data?.data || []);
+    renderList(results, memoryList, 'No memories match your search.');
+
+    const priorityRows = results.filter(hasOpenActionItems);
+    renderList(priorityRows, priorityList, 'No open action items found.');
+
+    if (openLoopsCount) openLoopsCount.textContent = priorityRows.length;
+    if (shownCount) shownCount.textContent = results.length;
+  } catch (err) {
+    console.error('runAISearch failed:', err);
+    alert('Something went wrong during AI search.');
+  }
 }
 
 function createMetaChips(items, prefix = '') {
@@ -124,16 +142,13 @@ function renderList(rows, targetEl, emptyMessage) {
 }
 
 function renderApp() {
-  const term = searchInput ? searchInput.value.trim() : '';
-
-  const filtered = allMemories.filter(row => matchesSearch(row, term));
-  const priorityRows = filtered.filter(hasOpenActionItems);
+  const priorityRows = allMemories.filter(hasOpenActionItems);
 
   if (openLoopsCount) openLoopsCount.textContent = priorityRows.length;
-  if (shownCount) shownCount.textContent = filtered.length;
+  if (shownCount) shownCount.textContent = allMemories.length;
 
   renderList(priorityRows, priorityList, 'No open action items found.');
-  renderList(filtered, memoryList, 'No memories match your search.');
+  renderList(allMemories, memoryList, 'No memories found.');
 }
 
 function openEditor(rowId) {
@@ -363,7 +378,11 @@ function injectCaptureBox() {
   anchor.parentNode.insertBefore(wrap, anchor);
 }
 
-if (searchInput) searchInput.addEventListener('input', renderApp);
+if (searchInput) {
+  searchInput.addEventListener('input', async () => {
+    await runAISearch(searchInput.value);
+  });
+}
 if (refreshBtn) refreshBtn.addEventListener('click', loadMemories);
 if (closeModalBtn) closeModalBtn.addEventListener('click', closeEditor);
 if (modalBackdrop) modalBackdrop.addEventListener('click', closeEditor);
