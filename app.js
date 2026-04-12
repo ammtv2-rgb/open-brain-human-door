@@ -66,9 +66,21 @@ async function runAISearch(query) {
       body: { query: q }
     });
 
+async function runAISearch(query) {
+  try {
+    const q = (query || '').trim();
+
+    if (!q) {
+      await loadMemories();
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke('search-memory', {
+      body: { query: q }
+    });
+
     if (error) {
       console.error('AI search error:', error);
-      alert('AI search failed. Check console for details.');
       return;
     }
 
@@ -82,10 +94,8 @@ async function runAISearch(query) {
     if (shownCount) shownCount.textContent = results.length;
   } catch (err) {
     console.error('runAISearch failed:', err);
-    alert('Something went wrong during AI search.');
   }
 }
-
 function createMetaChips(items, prefix = '') {
   return safeArray(items)
     .filter(Boolean)
