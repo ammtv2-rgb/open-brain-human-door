@@ -110,6 +110,12 @@ function ensureLoopStyles() {
       flex-wrap: wrap;
       align-items: center;
     }
+
+    .memory-list-label {
+      font-size: 14px;
+      margin: 8px 0 12px 0;
+      opacity: 0.8;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -169,43 +175,47 @@ function setFilter(filter) {
   renderApp();
 }
 
+window.setFilter = setFilter;
+
 function updateFilterButtons() {
   document.querySelectorAll('.filter-btn').forEach(btn => {
-    const isActive = btn.dataset.filter === currentFilter;
-    btn.classList.toggle('active', isActive);
+    btn.classList.toggle('active', btn.dataset.filter === currentFilter);
   });
 }
 
 function injectFilterBar() {
   if (document.getElementById('memoryFilterWrap')) return;
-  if (!searchInput) return;
+  if (!memoryList) return;
 
   const wrap = document.createElement('div');
   wrap.id = 'memoryFilterWrap';
-  wrap.className = 'filter-wrap';
 
-  const filters = [
-    { label: 'All', value: 'all' },
-    { label: 'Open', value: 'open' },
-    { label: 'Closed', value: 'closed' },
-    { label: 'Neutral', value: 'neutral' }
-  ];
+  wrap.innerHTML = `
+    <div class="filter-wrap">
+      <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
+      <button class="filter-btn" data-filter="open" onclick="setFilter('open')">Open</button>
+      <button class="filter-btn" data-filter="closed" onclick="setFilter('closed')">Closed</button>
+      <button class="filter-btn" data-filter="neutral" onclick="setFilter('neutral')">Neutral</button>
+    </div>
+    <div id="memoryListLabel" class="memory-list-label">Showing: All memories</div>
+  `;
 
-  filters.forEach(item => {
-    const btn = document.createElement('button');
-    btn.className = 'filter-btn';
-    btn.textContent = item.label;
-    btn.dataset.filter = item.value;
-    btn.addEventListener('click', () => setFilter(item.value));
-    wrap.appendChild(btn);
-  });
+  memoryList.parentNode.insertBefore(wrap, memoryList);
+}
 
-  const anchor = searchInput.parentElement;
-  if (anchor && anchor.parentNode) {
-    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+function updateMemoryListLabel() {
+  const label = document.getElementById('memoryListLabel');
+  if (!label) return;
+
+  if (currentFilter === 'all') {
+    label.textContent = 'Showing: All memories';
+  } else if (currentFilter === 'open') {
+    label.textContent = 'Showing: Open memories';
+  } else if (currentFilter === 'closed') {
+    label.textContent = 'Showing: Closed memories';
+  } else if (currentFilter === 'neutral') {
+    label.textContent = 'Showing: Neutral memories';
   }
-
-  updateFilterButtons();
 }
 
 function renderList(rows, targetEl, emptyMessage) {
@@ -261,14 +271,17 @@ function renderList(rows, targetEl, emptyMessage) {
 }
 
 function renderApp() {
-  const filteredRows = applyFilter(allMemories);
   const priorityRows = allMemories.filter(hasOpenActionItems);
+  const filteredRows = applyFilter(allMemories);
 
   if (openLoopsCount) openLoopsCount.textContent = priorityRows.length;
   if (shownCount) shownCount.textContent = filteredRows.length;
 
   renderList(priorityRows, priorityList, 'No open action items found.');
-  renderList(filteredRows, memoryList, 'No memories found.');
+  renderList(filteredRows, memoryList, 'No memories found for this filter.');
+
+  updateFilterButtons();
+  updateMemoryListLabel();
 }
 
 function openEditor(rowId) {
@@ -370,8 +383,7 @@ async function runAISearch(query) {
       return;
     }
 
-    const results = Array.isArray(data) ? data : (data?.data || []);
-    allMemories = results || [];
+    allMemories = Array.isArray(data) ? data : (data?.data || []);
     renderApp();
   } catch (err) {
     console.error('runAISearch failed:', err);
@@ -442,6 +454,7 @@ async function saveChanges() {
     return;
   }
 
+  currentFilter = 'all';
   closeEditor();
   await loadMemories();
 }
@@ -517,6 +530,7 @@ async function saveQuickMemory() {
   }
 
   captureTextarea.value = '';
+  currentFilter = 'all';
   await loadMemories();
 }
 
@@ -598,7 +612,12 @@ if (searchInput) {
   });
 }
 
-if (refreshBtn) refreshBtn.addEventListener('click', loadMemories);
+if (refreshBtn) refreshBtn.addEventListener('click', async () => {
+  currentFilter = 'all';
+  if (searchInput) searchInput.value = '';
+  await loadMemories();
+});
+
 if (closeModalBtn) closeModalBtn.addEventListener('click', closeEditor);
 if (modalBackdrop) modalBackdrop.addEventListener('click', closeEditor);
 if (saveBtn) saveBtn.addEventListener('click', saveChanges);
