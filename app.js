@@ -66,19 +66,6 @@ async function runAISearch(query) {
       body: { query: q }
     });
 
-async function runAISearch(query) {
-  try {
-    const q = (query || '').trim();
-
-    if (!q) {
-      await loadMemories();
-      return;
-    }
-
-    const { data, error } = await supabase.functions.invoke('search-memory', {
-      body: { query: q }
-    });
-
     if (error) {
       console.error('AI search error:', error);
       return;
@@ -96,6 +83,7 @@ async function runAISearch(query) {
     console.error('runAISearch failed:', err);
   }
 }
+
 function createMetaChips(items, prefix = '') {
   return safeArray(items)
     .filter(Boolean)
@@ -254,6 +242,7 @@ async function saveChanges() {
 async function saveQuickMemory() {
   const captureTextarea = document.getElementById('quickCaptureInput');
   const quickSaveBtn = document.getElementById('quickSaveBtn');
+  const quickCaptureType = document.getElementById('quickCaptureType');
 
   if (!captureTextarea || !quickSaveBtn) return;
 
@@ -263,7 +252,7 @@ async function saveQuickMemory() {
   quickSaveBtn.textContent = 'Saving...';
   quickSaveBtn.disabled = true;
 
-  let detectedType = 'note';
+  let detectedType = quickCaptureType ? quickCaptureType.value : 'note';
   let actionItems = [];
 
   const lower = rawText.toLowerCase();
@@ -279,7 +268,9 @@ async function saveQuickMemory() {
     lower.includes('transfer') ||
     lower.includes('deposit')
   ) {
-    detectedType = 'task';
+    if (detectedType === 'note') {
+      detectedType = 'task';
+    }
 
     actionItems = rawText
       .split(/\.|,|and/i)
@@ -395,6 +386,7 @@ if (searchInput) {
     }
   });
 }
+
 if (refreshBtn) refreshBtn.addEventListener('click', loadMemories);
 if (closeModalBtn) closeModalBtn.addEventListener('click', closeEditor);
 if (modalBackdrop) modalBackdrop.addEventListener('click', closeEditor);
