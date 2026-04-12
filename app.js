@@ -25,6 +25,7 @@ const editType = document.getElementById('editType');
 
 let allMemories = [];
 let currentEditRow = null;
+let currentFilter = 'all';
 
 function safeArray(value) {
   if (Array.isArray(value)) return value;
@@ -49,39 +50,94 @@ function badgeClass(type) {
   return 'badge badge-default';
 }
 
-function hasOpenActionItems(row) {
-  return safeArray(row.action_items).length > 0;
+function ensureLoopStyles() {
+  if (document.getElementById('loopStatusStyles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'loopStatusStyles';
+  style.textContent = `
+    .filter-wrap {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 14px 0 18px 0;
+    }
+
+    .filter-btn {
+      padding: 9px 14px;
+      border: 1px solid #d9deea;
+      border-radius: 999px;
+      background: #fff;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .filter-btn.active {
+      background: #111827;
+      color: white;
+      border-color: #111827;
+    }
+
+    .loop-badge {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 8px;
+      margin-right: 8px;
+    }
+
+    .loop-open {
+      background: #ffe5e5;
+      color: #b00020;
+    }
+
+    .loop-closed {
+      background: #e6f7ea;
+      color: #157347;
+    }
+
+    .loop-neutral {
+      background: #f1f3f5;
+      color: #495057;
+    }
+
+    .memory-status-row {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+  `;
+  document.head.appendChild(style);
 }
 
-async function runAISearch(query) {
-  try {
-    const q = (query || '').trim();
+function getLoopStatus(row) {
+  const raw = String(row.loop_status || '').toLowerCase();
 
-    if (!q) {
-      await loadMemories();
-      return;
-    }
+  if (raw === 'open' || row.is_open_loop === true) return 'open';
+  if (raw === 'closed') return 'closed';
+  return 'neutral';
+}
 
-    const { data, error } = await supabase.functions.invoke('search-memory', {
-      body: { query: q }
-    });
+function getLoopBadge(row) {
+  const status = getLoopStatus(row);
 
-    if (error) {
-      console.error('AI search error:', error);
-      return;
-    }
-
-    const results = Array.isArray(data) ? data : (data?.data || []);
-    renderList(results, memoryList, 'No memories match your search.');
-
-    const priorityRows = results.filter(hasOpenActionItems);
-    renderList(priorityRows, priorityList, 'No open action items found.');
-
-    if (openLoopsCount) openLoopsCount.textContent = priorityRows.length;
-    if (shownCount) shownCount.textContent = results.length;
-  } catch (err) {
-    console.error('runAISearch failed:', err);
+  if (status === 'open') {
+    return `<span class="loop-badge loop-open">🔴 Open</span>`;
   }
+
+  if (status === 'closed') {
+    return `<span class="loop-badge loop-closed">🟢 Closed</span>`;
+  }
+
+  return `<span class="loop-badge loop-neutral">⚪ Neutral</span>`;
+}
+
+function hasOpenActionItems(row) {
+  return getLoopStatus(row) === 'open' || safeArray(row.action_items).length > 0;
 }
 
 function createMetaChips(items, prefix = '') {
@@ -89,6 +145,67 @@ function createMetaChips(items, prefix = '') {
     .filter(Boolean)
     .map(item => `<span class="meta-chip">${prefix}${item}</span>`)
     .join('');
+}
+
+function applyFilter(rows) {
+  if (currentFilter === 'open') {
+    return rows.filter(row => getLoopStatus(row) === 'open');
+  }
+
+  if (currentFilter === 'closed') {
+    return rows.filter(row => getLoopStatus(row) === 'closed');
+  }
+
+  if (currentFilter === 'neutral') {
+    return rows.filter(row => getLoopStatus(row) === 'neutral');
+  }
+
+  return rows;
+}
+
+function setFilter(filter) {
+  currentFilter = filter;
+  updateFilterButtons();
+  renderApp();
+}
+
+function updateFilterButtons() {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    const isActive = btn.dataset.filter === currentFilter;
+    btn.classList.toggle('active', isActive);
+  });
+}
+
+function injectFilterBar() {
+  if (document.getElementById('memoryFilterWrap')) return;
+  if (!searchInput) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'memoryFilterWrap';
+  wrap.className = 'filter-wrap';
+
+  const filters = [
+    { label: 'All', value: 'all' },
+    { label: 'Open', value: 'open' },
+    { label: 'Closed', value: 'closed' },
+    { label: 'Neutral', value: 'neutral' }
+  ];
+
+  filters.forEach(item => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.textContent = item.label;
+    btn.dataset.filter = item.value;
+    btn.addEventListener('click', () => setFilter(item.value));
+    wrap.appendChild(btn);
+  });
+
+  const anchor = searchInput.parentElement;
+  if (anchor && anchor.parentNode) {
+    anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+  }
+
+  updateFilterButtons();
 }
 
 function renderList(rows, targetEl, emptyMessage) {
@@ -112,6 +229,10 @@ function renderList(rows, targetEl, emptyMessage) {
         </div>
 
         <div class="memory-content">${row.content || ''}</div>
+
+        <div class="memory-status-row">
+          ${getLoopBadge(row)}
+        </div>
 
         <div class="meta-block">
           ${peopleChips}
@@ -140,13 +261,14 @@ function renderList(rows, targetEl, emptyMessage) {
 }
 
 function renderApp() {
+  const filteredRows = applyFilter(allMemories);
   const priorityRows = allMemories.filter(hasOpenActionItems);
 
   if (openLoopsCount) openLoopsCount.textContent = priorityRows.length;
-  if (shownCount) shownCount.textContent = allMemories.length;
+  if (shownCount) shownCount.textContent = filteredRows.length;
 
   renderList(priorityRows, priorityList, 'No open action items found.');
-  renderList(allMemories, memoryList, 'No memories found.');
+  renderList(filteredRows, memoryList, 'No memories found.');
 }
 
 function openEditor(rowId) {
@@ -176,6 +298,86 @@ function commaStringToArray(value) {
     .filter(Boolean);
 }
 
+function detectOpenLoop(rawText) {
+  const lower = String(rawText || '').toLowerCase();
+
+  const openSignals = [
+    'need to',
+    'have to',
+    'must',
+    'remind me',
+    'follow up',
+    'call',
+    'pay',
+    'schedule',
+    'book',
+    'send',
+    'text',
+    'email',
+    'transfer',
+    'deposit',
+    'finish',
+    'complete',
+    'submit',
+    'renew'
+  ];
+
+  const closedSignals = [
+    'finished',
+    'completed',
+    'done',
+    'paid',
+    'called',
+    'sent',
+    'resolved'
+  ];
+
+  if (closedSignals.some(term => lower.includes(term))) {
+    return {
+      is_open_loop: false,
+      loop_status: 'closed'
+    };
+  }
+
+  if (openSignals.some(term => lower.includes(term))) {
+    return {
+      is_open_loop: true,
+      loop_status: 'open'
+    };
+  }
+
+  return {
+    is_open_loop: false,
+    loop_status: 'neutral'
+  };
+}
+
+async function runAISearch(query) {
+  try {
+    const q = (query || '').trim();
+
+    if (!q) {
+      await loadMemories();
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke('search-memory', {
+      body: { query: q }
+    });
+
+    if (error) {
+      console.error('AI search error:', error);
+      return;
+    }
+
+    const results = Array.isArray(data) ? data : (data?.data || []);
+    allMemories = results || [];
+    renderApp();
+  } catch (err) {
+    console.error('runAISearch failed:', err);
+  }
+}
+
 async function loadMemories() {
   if (priorityList) {
     priorityList.innerHTML = `<div class="empty-state">Loading memories...</div>`;
@@ -186,7 +388,7 @@ async function loadMemories() {
 
   const { data, error } = await supabase
     .from('memories')
-    .select('id, created_at, content, people, topics, action_items, type')
+    .select('id, created_at, content, people, topics, action_items, type, is_open_loop, loop_status')
     .order('created_at', { ascending: false })
     .limit(200);
 
@@ -207,12 +409,17 @@ async function loadMemories() {
 async function saveChanges() {
   if (!currentEditRow) return;
 
+  const contentValue = editContent ? editContent.value.trim() : '';
+  const loopFields = detectOpenLoop(contentValue);
+
   const payload = {
-    content: editContent ? editContent.value.trim() : '',
+    content: contentValue,
     people: editPeople ? commaStringToArray(editPeople.value) : [],
     topics: editTopics ? commaStringToArray(editTopics.value) : [],
     action_items: editActionItems ? commaStringToArray(editActionItems.value) : [],
-    type: editType ? editType.value.trim() : ''
+    type: editType ? editType.value.trim() : '',
+    is_open_loop: loopFields.is_open_loop,
+    loop_status: loopFields.loop_status
   };
 
   if (saveBtn) {
@@ -287,10 +494,14 @@ async function saveQuickMemory() {
       );
   }
 
+  const loopFields = detectOpenLoop(rawText);
+
   const payload = {
     content: rawText,
     type: detectedType,
-    action_items: actionItems
+    action_items: actionItems,
+    is_open_loop: loopFields.is_open_loop,
+    loop_status: loopFields.loop_status
   };
 
   const { error } = await supabase
@@ -392,5 +603,7 @@ if (closeModalBtn) closeModalBtn.addEventListener('click', closeEditor);
 if (modalBackdrop) modalBackdrop.addEventListener('click', closeEditor);
 if (saveBtn) saveBtn.addEventListener('click', saveChanges);
 
+ensureLoopStyles();
 injectCaptureBox();
+injectFilterBar();
 loadMemories();
