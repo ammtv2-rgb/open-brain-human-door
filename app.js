@@ -333,9 +333,19 @@ function renderApp() {
   const priorityRows = allMemories.filter(hasOpenActionItems);
   const filteredRows = applyFilter(allMemories);
 
+  const prioritySection = document.querySelector('.priority-section');
+  const shouldShowPriority = currentFilter === 'all' || currentFilter === 'open';
+
   updateDashboard(allMemories);
 
-  renderList(priorityRows, priorityList, 'No open action items found.');
+  if (prioritySection) {
+    prioritySection.style.display = shouldShowPriority ? 'block' : 'none';
+  }
+
+  if (shouldShowPriority) {
+    renderList(priorityRows, priorityList, 'No open action items found.');
+  }
+
   renderList(filteredRows, memoryList, 'No memories found for this filter.');
 
   updateFilterButtons();
