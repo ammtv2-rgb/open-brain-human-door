@@ -394,7 +394,25 @@ async function saveChanges() {
   closeEditor();
   await loadMemories();
 }
+async function markAsClosed(rowId) {
+  const row = allMemories.find(item => String(item.id) === String(rowId));
+  if (!row) return;
 
+  const { error } = await supabase
+    .from('memories')
+    .update({
+      is_open_loop: false,
+      loop_status: 'closed'
+    })
+    .eq('id', rowId);
+
+  if (error) {
+    alert(`Could not mark memory as closed: ${error.message}`);
+    return;
+  }
+
+  await loadMemories();
+}
 // ---------- DELETE ----------
 async function deleteMemory(rowId) {
   const row = allMemories.find(item => String(item.id) === String(rowId));
