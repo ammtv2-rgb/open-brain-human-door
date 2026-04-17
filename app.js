@@ -116,6 +116,20 @@ function ensureLoopStyles() {
       margin: 8px 0 12px 0;
       opacity: 0.8;
     }
+
+    .danger-btn {
+      background: #dc2626;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .danger-btn:hover {
+      opacity: 0.92;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -257,6 +271,7 @@ function renderList(rows, targetEl, emptyMessage) {
 
         <div class="card-actions">
           <button class="primary-btn" data-edit-id="${row.id}">Edit</button>
+          <button class="danger-btn" data-delete-id="${row.id}">Delete</button>
         </div>
       </article>
     `;
@@ -266,6 +281,13 @@ function renderList(rows, targetEl, emptyMessage) {
     btn.addEventListener('click', () => {
       const rowId = btn.getAttribute('data-edit-id');
       openEditor(rowId);
+    });
+  });
+
+  targetEl.querySelectorAll('[data-delete-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rowId = btn.getAttribute('data-delete-id');
+      await deleteMemory(rowId);
     });
   });
 }
@@ -456,6 +478,27 @@ async function saveChanges() {
 
   currentFilter = 'all';
   closeEditor();
+  await loadMemories();
+}
+
+async function deleteMemory(rowId) {
+  const row = allMemories.find(item => String(item.id) === String(rowId));
+  const label = row?.content ? row.content.slice(0, 80) : 'this memory';
+
+  const confirmed = window.confirm(`Delete this memory?\n\n${label}`);
+  if (!confirmed) return;
+
+  const { error } = await supabase
+    .from('memories')
+    .delete()
+    .eq('id', rowId);
+
+  if (error) {
+    alert(`Could not delete memory: ${error.message}`);
+    return;
+  }
+
+  currentFilter = 'all';
   await loadMemories();
 }
 
