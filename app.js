@@ -423,7 +423,8 @@ async function markAsClosed(rowId) {
     .from('memories')
     .update({
       is_open_loop: false,
-      loop_status: 'closed'
+      loop_status: 'closed',
+      closed_at: new Date().toISOString()
     })
     .eq('id', rowId);
 
