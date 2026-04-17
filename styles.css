@@ -438,8 +438,8 @@ body {
   .card-actions {
     justify-content: flex-start;
   }
-
   .modal-panel {
     margin: 20px auto;
   }
-}Make dashboard cards clickable filters
+}
+ 
