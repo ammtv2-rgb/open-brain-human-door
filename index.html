@@ -13,6 +13,28 @@
       <p class="subtitle">Morning scan for your public.memories table</p>
     </header>
 
+    <div class="dashboard-counters">
+      <div class="counter-card">
+        <div class="counter-label">Total memories</div>
+        <div class="counter-value" id="totalMemoriesCount">0</div>
+      </div>
+
+      <div class="counter-card">
+        <div class="counter-label">Open loops</div>
+        <div class="counter-value" id="openLoopsCount">0</div>
+      </div>
+
+      <div class="counter-card">
+        <div class="counter-label">Neutral</div>
+        <div class="counter-value" id="neutralCount">0</div>
+      </div>
+
+      <div class="counter-card">
+        <div class="counter-label">Closed</div>
+        <div class="counter-value" id="closedCount">0</div>
+      </div>
+    </div>
+
     <section class="search-wrap">
       <input
         id="searchInput"
@@ -24,7 +46,7 @@
     <section class="summary-strip">
       <div class="summary-card accent-orange">
         <div class="summary-label">Open loops</div>
-        <div class="summary-value" id="openLoopsCount">0</div>
+        <div class="summary-value" id="openLoopsCountOld">0</div>
       </div>
       <div class="summary-card accent-blue">
         <div class="summary-label">Total shown</div>
