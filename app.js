@@ -296,10 +296,15 @@ function renderList(rows, targetEl, emptyMessage) {
             : ''
         }
 
-        <div class="card-actions">
-          <button class="card-edit-btn" data-edit-id="${escapeHtml(row.id)}">Edit</button>
-          <button class="card-delete-btn" data-delete-id="${escapeHtml(row.id)}">Delete</button>
-        </div>
+  <div class="card-actions">
+  ${
+    status === 'open'
+      ? `<button class="card-close-btn" data-close-id="${escapeHtml(row.id)}">Mark Closed</button>`
+      : ''
+  }
+  <button class="card-edit-btn" data-edit-id="${escapeHtml(row.id)}">Edit</button>
+  <button class="card-delete-btn" data-delete-id="${escapeHtml(row.id)}">Delete</button>
+</div>     
       </article>
     `;
   }).join('');
@@ -310,7 +315,12 @@ function renderList(rows, targetEl, emptyMessage) {
       openEditor(rowId);
     });
   });
-
+targetEl.querySelectorAll('[data-close-id]').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const rowId = btn.getAttribute('data-close-id');
+    await markAsClosed(rowId);
+  });
+});
   targetEl.querySelectorAll('[data-delete-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const rowId = btn.getAttribute('data-delete-id');
@@ -394,6 +404,7 @@ async function saveChanges() {
   closeEditor();
   await loadMemories();
 }
+
 async function markAsClosed(rowId) {
   const row = allMemories.find(item => String(item.id) === String(rowId));
   if (!row) return;
