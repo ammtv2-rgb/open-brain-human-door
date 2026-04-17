@@ -13,7 +13,7 @@
       <p class="subtitle">Morning scan for your public.memories table</p>
     </header>
 
-    <div class="dashboard-counters">
+    <section class="dashboard-counters">
       <div class="counter-card">
         <div class="counter-label">Total memories</div>
         <div class="counter-value" id="totalMemoriesCount">0</div>
@@ -33,7 +33,35 @@
         <div class="counter-label">Closed</div>
         <div class="counter-value" id="closedCount">0</div>
       </div>
-    </div>
+    </section>
+
+    <section class="capture-section">
+      <div class="section-header">
+        <h2>Quick capture</h2>
+      </div>
+
+      <textarea
+        id="captureInput"
+        class="capture-textarea"
+        rows="5"
+        placeholder="Type or speak your thought here..."
+      ></textarea>
+
+      <div class="capture-controls">
+        <select id="typeSelect" class="type-select">
+          <option value="note">note</option>
+          <option value="task">task</option>
+          <option value="idea">idea</option>
+          <option value="reminder">reminder</option>
+        </select>
+
+        <button id="saveMemoryBtn" class="primary-btn">Save Memory</button>
+      </div>
+
+      <p class="helper-text">
+        Fast capture for desktop and iPhone. Use voice dictation on your phone keyboard if you want to speak instead of type.
+      </p>
+    </section>
 
     <section class="search-wrap">
       <input
@@ -41,17 +69,6 @@
         type="text"
         placeholder="Search anything: thoughts, people, topics, action items..."
       />
-    </section>
-
-    <section class="summary-strip">
-      <div class="summary-card accent-orange">
-        <div class="summary-label">Open loops</div>
-        <div class="summary-value" id="openLoopsCountOld">0</div>
-      </div>
-      <div class="summary-card accent-blue">
-        <div class="summary-label">Total shown</div>
-        <div class="summary-value" id="shownCount">0</div>
-      </div>
     </section>
 
     <section class="priority-section">
