@@ -31,6 +31,8 @@ const editTopics = document.getElementById('editTopics');
 const editActionItems = document.getElementById('editActionItems');
 const editType = document.getElementById('editType');
 
+const dashboardCards = document.querySelectorAll('.dashboard-filter-card');
+
 // ---------- STATE ----------
 let allMemories = [];
 let currentEditRow = null;
@@ -83,12 +85,6 @@ function getStoredLoopStatus(row) {
   return 'neutral';
 }
 
-/*
-  This is the IMPORTANT part:
-  Older rows may not have is_open_loop / loop_status set correctly,
-  but they DO have action_items. We treat those as OPEN for display,
-  dashboard counts, filters, and the "Open action items" section.
-*/
 function getEffectiveLoopStatus(row) {
   const stored = getStoredLoopStatus(row);
 
@@ -178,6 +174,7 @@ function applyFilter(rows) {
 function setFilter(filter) {
   currentFilter = filter;
   updateFilterButtons();
+  updateDashboardCardStates();
   renderApp();
 }
 
@@ -187,6 +184,17 @@ function updateFilterButtons() {
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.filter === currentFilter);
   });
+}
+
+function updateDashboardCardStates() {
+  dashboardCards.forEach(card => {
+    card.classList.toggle('active', card.dataset.filter === currentFilter);
+  });
+
+  if (currentFilter === 'all') {
+    const allCard = document.getElementById('cardAll');
+    if (allCard) allCard.classList.add('active');
+  }
 }
 
 function injectFilterBar() {
@@ -321,6 +329,7 @@ function renderApp() {
   renderList(filteredRows, memoryList, 'No memories found for this filter.');
 
   updateFilterButtons();
+  updateDashboardCardStates();
   updateMemoryListLabel();
 }
 
@@ -530,6 +539,15 @@ async function loadMemories() {
 }
 
 // ---------- EVENTS ----------
+if (dashboardCards.length) {
+  dashboardCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const filter = card.dataset.filter || 'all';
+      setFilter(filter);
+    });
+  });
+}
+
 if (searchInput) {
   searchInput.addEventListener('keydown', async event => {
     if (event.key === 'Enter') {
