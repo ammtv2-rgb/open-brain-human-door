@@ -5,7 +5,7 @@ const SUPABASE_KEY = 'sb_publishable_muNMrMjZDHYxT616JNJZHQ_YErEnvUS';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// DOM ELEMENTS
+// ---------- DOM ----------
 const searchInput = document.getElementById('searchInput');
 const refreshBtn = document.getElementById('refreshBtn');
 const priorityList = document.getElementById('priorityList');
@@ -20,34 +20,199 @@ const captureInput = document.getElementById('captureInput');
 const saveMemoryBtn = document.getElementById('saveMemoryBtn');
 const typeSelect = document.getElementById('typeSelect');
 
-// STATE
+const editModal = document.getElementById('editModal');
+const modalBackdrop = document.getElementById('modalBackdrop');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const saveBtn = document.getElementById('saveBtn');
+
+const editContent = document.getElementById('editContent');
+const editPeople = document.getElementById('editPeople');
+const editTopics = document.getElementById('editTopics');
+const editActionItems = document.getElementById('editActionItems');
+const editType = document.getElementById('editType');
+
+// ---------- STATE ----------
 let allMemories = [];
+let currentEditRow = null;
 let currentFilter = 'all';
 
-// HELPERS
-function safeArray(v) {
-  if (Array.isArray(v)) return v;
-  if (!v) return [];
-  return [String(v)];
+// ---------- HELPERS ----------
+function safeArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  return [String(value)];
 }
 
-function formatDate(v) {
-  if (!v) return '';
-  return new Date(v).toLocaleString();
+function formatDate(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleString();
 }
 
+function commaStringToArray(value) {
+  return String(value || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function badgeClass(type) {
+  const cleaned = String(type || '').toLowerCase();
+  if (cleaned === 'note') return 'badge badge-note';
+  if (cleaned === 'task') return 'badge badge-task';
+  if (cleaned === 'reminder') return 'badge badge-reminder';
+  if (cleaned === 'follow-up') return 'badge badge-follow-up';
+  if (cleaned === 'idea') return 'badge badge-default';
+  return 'badge badge-default';
+}
+
+// ---------- LOOP LOGIC ----------
 function getLoopStatus(row) {
-  if (row.is_open_loop === true) return 'open';
-  if (row.loop_status === 'closed') return 'closed';
+  const raw = String(row.loop_status || '').toLowerCase();
+
+  if (raw === 'open' || row.is_open_loop === true) return 'open';
+  if (raw === 'closed') return 'closed';
   return 'neutral';
 }
 
-// DASHBOARD COUNTS
+function hasOpenActionItems(row) {
+  return getLoopStatus(row) === 'open' || safeArray(row.action_items).length > 0;
+}
+
+function detectOpenLoop(rawText) {
+  const lower = String(rawText || '').toLowerCase();
+
+  const openSignals = [
+    'need to',
+    'have to',
+    'must',
+    'remind me',
+    'follow up',
+    'call',
+    'pay',
+    'schedule',
+    'book',
+    'send',
+    'text',
+    'email',
+    'transfer',
+    'deposit',
+    'finish',
+    'complete',
+    'submit',
+    'renew'
+  ];
+
+  const closedSignals = [
+    'finished',
+    'completed',
+    'done',
+    'paid',
+    'called',
+    'sent',
+    'resolved'
+  ];
+
+  if (closedSignals.some(term => lower.includes(term))) {
+    return {
+      is_open_loop: false,
+      loop_status: 'closed'
+    };
+  }
+
+  if (openSignals.some(term => lower.includes(term))) {
+    return {
+      is_open_loop: true,
+      loop_status: 'open'
+    };
+  }
+
+  return {
+    is_open_loop: false,
+    loop_status: 'neutral'
+  };
+}
+
+// ---------- FILTERS ----------
+function applyFilter(rows) {
+  if (currentFilter === 'open') {
+    return rows.filter(row => getLoopStatus(row) === 'open');
+  }
+
+  if (currentFilter === 'closed') {
+    return rows.filter(row => getLoopStatus(row) === 'closed');
+  }
+
+  if (currentFilter === 'neutral') {
+    return rows.filter(row => getLoopStatus(row) === 'neutral');
+  }
+
+  return rows;
+}
+
+function setFilter(filter) {
+  currentFilter = filter;
+  updateFilterButtons();
+  renderApp();
+}
+
+window.setFilter = setFilter;
+
+function updateFilterButtons() {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === currentFilter);
+  });
+}
+
+function injectFilterBar() {
+  if (document.getElementById('memoryFilterWrap')) return;
+  if (!memoryList) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'memoryFilterWrap';
+
+  wrap.innerHTML = `
+    <div class="filter-wrap">
+      <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
+      <button class="filter-btn" data-filter="open" onclick="setFilter('open')">Open</button>
+      <button class="filter-btn" data-filter="closed" onclick="setFilter('closed')">Closed</button>
+      <button class="filter-btn" data-filter="neutral" onclick="setFilter('neutral')">Neutral</button>
+    </div>
+    <div id="memoryListLabel" class="memory-list-label">Showing: All memories</div>
+  `;
+
+  memoryList.parentNode.insertBefore(wrap, memoryList);
+}
+
+function updateMemoryListLabel() {
+  const label = document.getElementById('memoryListLabel');
+  if (!label) return;
+
+  if (currentFilter === 'all') {
+    label.textContent = 'Showing: All memories';
+  } else if (currentFilter === 'open') {
+    label.textContent = 'Showing: Open memories';
+  } else if (currentFilter === 'closed') {
+    label.textContent = 'Showing: Closed memories';
+  } else if (currentFilter === 'neutral') {
+    label.textContent = 'Showing: Neutral memories';
+  }
+}
+
+// ---------- DASHBOARD ----------
 function updateDashboard(rows) {
   const total = rows.length;
-  const open = rows.filter(r => getLoopStatus(r) === 'open').length;
-  const closed = rows.filter(r => getLoopStatus(r) === 'closed').length;
-  const neutral = rows.filter(r => getLoopStatus(r) === 'neutral').length;
+  const open = rows.filter(row => getLoopStatus(row) === 'open').length;
+  const neutral = rows.filter(row => getLoopStatus(row) === 'neutral').length;
+  const closed = rows.filter(row => getLoopStatus(row) === 'closed').length;
 
   if (totalMemoriesCount) totalMemoriesCount.textContent = total;
   if (openLoopsCount) openLoopsCount.textContent = open;
@@ -55,61 +220,297 @@ function updateDashboard(rows) {
   if (closedCount) closedCount.textContent = closed;
 }
 
-// FILTER
-function applyFilter(rows) {
-  if (currentFilter === 'open') return rows.filter(r => getLoopStatus(r) === 'open');
-  if (currentFilter === 'closed') return rows.filter(r => getLoopStatus(r) === 'closed');
-  if (currentFilter === 'neutral') return rows.filter(r => getLoopStatus(r) === 'neutral');
-  return rows;
-}
-
-// RENDER LIST
-function renderList(rows, el) {
-  if (!el) return;
+// ---------- RENDER ----------
+function renderList(rows, targetEl, emptyMessage) {
+  if (!targetEl) return;
 
   if (!rows.length) {
-    el.innerHTML = `<div>No results</div>`;
+    targetEl.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)}</div>`;
     return;
   }
 
-  el.innerHTML = rows.map(r => `
-    <div class="memory-card">
-      <div><strong>${r.type || 'memory'}</strong> — ${formatDate(r.created_at)}</div>
-      <div>${r.content || ''}</div>
+  targetEl.innerHTML = rows.map(row => {
+    const actions = safeArray(row.action_items);
+    const people = safeArray(row.people);
+    const topics = safeArray(row.topics);
+    const status = getLoopStatus(row);
 
-      ${
-        safeArray(r.action_items).length
-          ? `<div><strong>Action:</strong> ${safeArray(r.action_items).join(', ')}</div>`
-          : ''
-      }
+    return `
+      <article class="memory-card">
+        <div class="memory-topline">
+          <span class="${badgeClass(row.type)}">${escapeHtml(row.type || 'memory')}</span>
+          <span class="memory-date">${escapeHtml(formatDate(row.created_at))}</span>
+        </div>
 
-      <div>
-        <button onclick="deleteMemory('${r.id}')">Delete</button>
-      </div>
-    </div>
-  `).join('');
+        <div class="memory-content">${escapeHtml(row.content || '')}</div>
+
+        <div class="memory-status-row">
+          <span class="loop-badge loop-${status}">
+            ${status === 'open' ? '🔴 Open' : status === 'closed' ? '🟢 Closed' : '⚪ Neutral'}
+          </span>
+        </div>
+
+        ${
+          people.length || topics.length
+            ? `
+            <div class="meta-block">
+              ${people.map(person => `<span class="meta-chip">@${escapeHtml(person)}</span>`).join('')}
+              ${topics.map(topic => `<span class="meta-chip">#${escapeHtml(topic)}</span>`).join('')}
+            </div>
+            `
+            : ''
+        }
+
+        ${
+          actions.length
+            ? `
+            <div class="action-box">
+              <strong>Action items:</strong> ${actions.map(escapeHtml).join(', ')}
+            </div>
+            `
+            : ''
+        }
+
+        <div class="card-actions">
+          <button class="card-edit-btn" data-edit-id="${escapeHtml(row.id)}">Edit</button>
+          <button class="card-delete-btn" data-delete-id="${escapeHtml(row.id)}">Delete</button>
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  targetEl.querySelectorAll('[data-edit-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rowId = btn.getAttribute('data-edit-id');
+      openEditor(rowId);
+    });
+  });
+
+  targetEl.querySelectorAll('[data-delete-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rowId = btn.getAttribute('data-delete-id');
+      await deleteMemory(rowId);
+    });
+  });
 }
 
-// MAIN RENDER
 function renderApp() {
-  const filtered = applyFilter(allMemories);
-  const openItems = allMemories.filter(r => getLoopStatus(r) === 'open');
+  const priorityRows = allMemories.filter(hasOpenActionItems);
+  const filteredRows = applyFilter(allMemories);
 
   updateDashboard(allMemories);
 
-  renderList(openItems, priorityList);
-  renderList(filtered, memoryList);
+  renderList(priorityRows, priorityList, 'No open action items found.');
+  renderList(filteredRows, memoryList, 'No memories found for this filter.');
+
+  updateFilterButtons();
+  updateMemoryListLabel();
 }
 
-// LOAD DATA
-async function loadMemories() {
-  const { data, error } = await supabase
+// ---------- EDIT ----------
+function openEditor(rowId) {
+  const row = allMemories.find(item => String(item.id) === String(rowId));
+  if (!row) return;
+
+  currentEditRow = row;
+
+  if (editContent) editContent.value = row.content || '';
+  if (editPeople) editPeople.value = safeArray(row.people).join(', ');
+  if (editTopics) editTopics.value = safeArray(row.topics).join(', ');
+  if (editActionItems) editActionItems.value = safeArray(row.action_items).join(', ');
+  if (editType) editType.value = row.type || '';
+
+  if (editModal) editModal.classList.remove('hidden');
+}
+
+function closeEditor() {
+  if (editModal) editModal.classList.add('hidden');
+  currentEditRow = null;
+}
+
+async function saveChanges() {
+  if (!currentEditRow) return;
+
+  const contentValue = editContent ? editContent.value.trim() : '';
+  const loopFields = detectOpenLoop(contentValue);
+
+  const payload = {
+    content: contentValue,
+    people: editPeople ? commaStringToArray(editPeople.value) : [],
+    topics: editTopics ? commaStringToArray(editTopics.value) : [],
+    action_items: editActionItems ? commaStringToArray(editActionItems.value) : [],
+    type: editType ? editType.value.trim() : '',
+    is_open_loop: loopFields.is_open_loop,
+    loop_status: loopFields.loop_status
+  };
+
+  if (saveBtn) {
+    saveBtn.textContent = 'Saving...';
+    saveBtn.disabled = true;
+  }
+
+  const { error } = await supabase
     .from('memories')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .update(payload)
+    .eq('id', currentEditRow.id);
+
+  if (saveBtn) {
+    saveBtn.textContent = 'Save changes';
+    saveBtn.disabled = false;
+  }
 
   if (error) {
-    console.error(error);
+    alert(`Could not save changes: ${error.message}`);
+    return;
+  }
+
+  currentFilter = 'all';
+  closeEditor();
+  await loadMemories();
+}
+
+// ---------- DELETE ----------
+async function deleteMemory(rowId) {
+  const row = allMemories.find(item => String(item.id) === String(rowId));
+  const label = row?.content ? row.content.slice(0, 80) : 'this memory';
+
+  const confirmed = window.confirm(`Delete this memory?\n\n${label}`);
+  if (!confirmed) return;
+
+  const { error } = await supabase
+    .from('memories')
+    .delete()
+    .eq('id', rowId);
+
+  if (error) {
+    alert(`Could not delete memory: ${error.message}`);
+    return;
+  }
+
+  currentFilter = 'all';
+  await loadMemories();
+}
+
+// ---------- SAVE NEW MEMORY ----------
+async function saveMemory() {
+  if (!captureInput || !saveMemoryBtn) return;
+
+  const rawText = captureInput.value.trim();
+  if (!rawText) return;
+
+  saveMemoryBtn.textContent = 'Saving...';
+  saveMemoryBtn.disabled = true;
+
+  let detectedType = typeSelect ? typeSelect.value : 'note';
+  let actionItems = [];
+
+  const lower = rawText.toLowerCase();
+
+  if (
+    lower.includes('need to') ||
+    lower.includes('have to') ||
+    lower.includes('must') ||
+    lower.includes('pay') ||
+    lower.includes('call') ||
+    lower.includes('follow up') ||
+    lower.includes('schedule') ||
+    lower.includes('transfer') ||
+    lower.includes('deposit')
+  ) {
+    if (detectedType === 'note') {
+      detectedType = 'task';
+    }
+
+    actionItems = rawText
+      .split(/\.|,|and/i)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .filter(s =>
+        s.toLowerCase().includes('pay') ||
+        s.toLowerCase().includes('call') ||
+        s.toLowerCase().includes('need') ||
+        s.toLowerCase().includes('deposit') ||
+        s.toLowerCase().includes('transfer') ||
+        s.toLowerCase().includes('follow up') ||
+        s.toLowerCase().includes('schedule')
+      );
+  }
+
+  const loopFields = detectOpenLoop(rawText);
+
+  const payload = {
+    content: rawText,
+    type: detectedType,
+    action_items: actionItems,
+    is_open_loop: loopFields.is_open_loop,
+    loop_status: loopFields.loop_status
+  };
+
+  const { error } = await supabase
+    .from('memories')
+    .insert([payload]);
+
+  saveMemoryBtn.textContent = 'Save Memory';
+  saveMemoryBtn.disabled = false;
+
+  if (error) {
+    alert(`Could not save memory: ${error.message}`);
+    return;
+  }
+
+  captureInput.value = '';
+  currentFilter = 'all';
+  await loadMemories();
+}
+
+// ---------- SEARCH ----------
+async function runAISearch(query) {
+  try {
+    const q = String(query || '').trim();
+
+    if (!q) {
+      await loadMemories();
+      return;
+    }
+
+    const { data, error } = await supabase.functions.invoke('search-memory', {
+      body: { query: q }
+    });
+
+    if (error) {
+      console.error('AI search error:', error);
+      return;
+    }
+
+    allMemories = Array.isArray(data) ? data : (data?.data || []);
+    renderApp();
+  } catch (err) {
+    console.error('runAISearch failed:', err);
+  }
+}
+
+// ---------- LOAD ----------
+async function loadMemories() {
+  if (priorityList) {
+    priorityList.innerHTML = `<div class="empty-state">Loading memories...</div>`;
+  }
+  if (memoryList) {
+    memoryList.innerHTML = `<div class="empty-state">Loading memories...</div>`;
+  }
+
+  const { data, error } = await supabase
+    .from('memories')
+    .select('id, created_at, content, people, topics, action_items, type, is_open_loop, loop_status')
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (error) {
+    if (priorityList) {
+      priorityList.innerHTML = `<div class="empty-state">Error loading memories: ${escapeHtml(error.message)}</div>`;
+    }
+    if (memoryList) {
+      memoryList.innerHTML = `<div class="empty-state">Please check your Supabase settings and table access.</div>`;
+    }
     return;
   }
 
@@ -117,54 +518,31 @@ async function loadMemories() {
   renderApp();
 }
 
-// DELETE
-window.deleteMemory = async function (id) {
-  if (!confirm('Delete this memory?')) return;
-
-  await supabase.from('memories').delete().eq('id', id);
-  await loadMemories();
-};
-
-// SAVE MEMORY (NEW CLEAN VERSION)
-async function saveMemory() {
-  if (!captureInput) return;
-
-  const text = captureInput.value.trim();
-  if (!text) return;
-
-  const payload = {
-    content: text,
-    type: typeSelect?.value || 'note',
-    is_open_loop: text.toLowerCase().includes('need') || text.toLowerCase().includes('pay'),
-    loop_status: 'open'
-  };
-
-  await supabase.from('memories').insert([payload]);
-
-  captureInput.value = '';
-  await loadMemories();
-}
-
-// EVENTS
-if (saveMemoryBtn) {
-  saveMemoryBtn.addEventListener('click', saveMemory);
-}
-
+// ---------- EVENTS ----------
 if (searchInput) {
-  searchInput.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter') {
-      const q = searchInput.value.toLowerCase();
-      const filtered = allMemories.filter(m =>
-        JSON.stringify(m).toLowerCase().includes(q)
-      );
-      renderList(filtered, memoryList);
+  searchInput.addEventListener('keydown', async (event) => {
+    if (event.key === 'Enter') {
+      await runAISearch(searchInput.value);
     }
   });
 }
 
 if (refreshBtn) {
-  refreshBtn.addEventListener('click', loadMemories);
+  refreshBtn.addEventListener('click', async () => {
+    currentFilter = 'all';
+    if (searchInput) searchInput.value = '';
+    await loadMemories();
+  });
 }
 
-// INIT
+if (saveMemoryBtn) {
+  saveMemoryBtn.addEventListener('click', saveMemory);
+}
+
+if (closeModalBtn) closeModalBtn.addEventListener('click', closeEditor);
+if (modalBackdrop) modalBackdrop.addEventListener('click', closeEditor);
+if (saveBtn) saveBtn.addEventListener('click', saveChanges);
+
+// ---------- INIT ----------
+injectFilterBar();
 loadMemories();
