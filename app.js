@@ -66,25 +66,41 @@ function escapeHtml(value) {
 
 function badgeClass(type) {
   const cleaned = String(type || '').toLowerCase();
+
   if (cleaned === 'note') return 'badge badge-note';
   if (cleaned === 'task') return 'badge badge-task';
   if (cleaned === 'reminder') return 'badge badge-reminder';
   if (cleaned === 'follow-up') return 'badge badge-follow-up';
-  if (cleaned === 'idea') return 'badge badge-default';
   return 'badge badge-default';
 }
 
 // ---------- LOOP LOGIC ----------
-function getLoopStatus(row) {
+function getStoredLoopStatus(row) {
   const raw = String(row.loop_status || '').toLowerCase();
 
-  if (raw === 'open' || row.is_open_loop === true) return 'open';
   if (raw === 'closed') return 'closed';
+  if (raw === 'open' || row.is_open_loop === true) return 'open';
+  return 'neutral';
+}
+
+/*
+  This is the IMPORTANT part:
+  Older rows may not have is_open_loop / loop_status set correctly,
+  but they DO have action_items. We treat those as OPEN for display,
+  dashboard counts, filters, and the "Open action items" section.
+*/
+function getEffectiveLoopStatus(row) {
+  const stored = getStoredLoopStatus(row);
+
+  if (stored === 'closed') return 'closed';
+  if (stored === 'open') return 'open';
+  if (safeArray(row.action_items).length > 0) return 'open';
+
   return 'neutral';
 }
 
 function hasOpenActionItems(row) {
-  return getLoopStatus(row) === 'open' || safeArray(row.action_items).length > 0;
+  return getEffectiveLoopStatus(row) === 'open';
 }
 
 function detectOpenLoop(rawText) {
@@ -108,7 +124,8 @@ function detectOpenLoop(rawText) {
     'finish',
     'complete',
     'submit',
-    'renew'
+    'renew',
+    'review'
   ];
 
   const closedSignals = [
@@ -144,15 +161,15 @@ function detectOpenLoop(rawText) {
 // ---------- FILTERS ----------
 function applyFilter(rows) {
   if (currentFilter === 'open') {
-    return rows.filter(row => getLoopStatus(row) === 'open');
+    return rows.filter(row => getEffectiveLoopStatus(row) === 'open');
   }
 
   if (currentFilter === 'closed') {
-    return rows.filter(row => getLoopStatus(row) === 'closed');
+    return rows.filter(row => getEffectiveLoopStatus(row) === 'closed');
   }
 
   if (currentFilter === 'neutral') {
-    return rows.filter(row => getLoopStatus(row) === 'neutral');
+    return rows.filter(row => getEffectiveLoopStatus(row) === 'neutral');
   }
 
   return rows;
@@ -210,9 +227,9 @@ function updateMemoryListLabel() {
 // ---------- DASHBOARD ----------
 function updateDashboard(rows) {
   const total = rows.length;
-  const open = rows.filter(row => getLoopStatus(row) === 'open').length;
-  const neutral = rows.filter(row => getLoopStatus(row) === 'neutral').length;
-  const closed = rows.filter(row => getLoopStatus(row) === 'closed').length;
+  const open = rows.filter(row => getEffectiveLoopStatus(row) === 'open').length;
+  const closed = rows.filter(row => getEffectiveLoopStatus(row) === 'closed').length;
+  const neutral = rows.filter(row => getEffectiveLoopStatus(row) === 'neutral').length;
 
   if (totalMemoriesCount) totalMemoriesCount.textContent = total;
   if (openLoopsCount) openLoopsCount.textContent = open;
@@ -233,7 +250,7 @@ function renderList(rows, targetEl, emptyMessage) {
     const actions = safeArray(row.action_items);
     const people = safeArray(row.people);
     const topics = safeArray(row.topics);
-    const status = getLoopStatus(row);
+    const status = getEffectiveLoopStatus(row);
 
     return `
       <article class="memory-card">
@@ -392,6 +409,28 @@ async function deleteMemory(rowId) {
 }
 
 // ---------- SAVE NEW MEMORY ----------
+function extractActionItems(rawText) {
+  return String(rawText || '')
+    .split(/\.|,|and/i)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .filter(s => {
+      const lower = s.toLowerCase();
+      return (
+        lower.includes('pay') ||
+        lower.includes('call') ||
+        lower.includes('need') ||
+        lower.includes('deposit') ||
+        lower.includes('transfer') ||
+        lower.includes('follow up') ||
+        lower.includes('schedule') ||
+        lower.includes('review') ||
+        lower.includes('send') ||
+        lower.includes('submit')
+      );
+    });
+}
+
 async function saveMemory() {
   if (!captureInput || !saveMemoryBtn) return;
 
@@ -402,38 +441,10 @@ async function saveMemory() {
   saveMemoryBtn.disabled = true;
 
   let detectedType = typeSelect ? typeSelect.value : 'note';
-  let actionItems = [];
+  const actionItems = extractActionItems(rawText);
 
-  const lower = rawText.toLowerCase();
-
-  if (
-    lower.includes('need to') ||
-    lower.includes('have to') ||
-    lower.includes('must') ||
-    lower.includes('pay') ||
-    lower.includes('call') ||
-    lower.includes('follow up') ||
-    lower.includes('schedule') ||
-    lower.includes('transfer') ||
-    lower.includes('deposit')
-  ) {
-    if (detectedType === 'note') {
-      detectedType = 'task';
-    }
-
-    actionItems = rawText
-      .split(/\.|,|and/i)
-      .map(s => s.trim())
-      .filter(Boolean)
-      .filter(s =>
-        s.toLowerCase().includes('pay') ||
-        s.toLowerCase().includes('call') ||
-        s.toLowerCase().includes('need') ||
-        s.toLowerCase().includes('deposit') ||
-        s.toLowerCase().includes('transfer') ||
-        s.toLowerCase().includes('follow up') ||
-        s.toLowerCase().includes('schedule')
-      );
+  if (actionItems.length > 0 && detectedType === 'note') {
+    detectedType = 'task';
   }
 
   const loopFields = detectOpenLoop(rawText);
@@ -520,7 +531,7 @@ async function loadMemories() {
 
 // ---------- EVENTS ----------
 if (searchInput) {
-  searchInput.addEventListener('keydown', async (event) => {
+  searchInput.addEventListener('keydown', async event => {
     if (event.key === 'Enter') {
       await runAISearch(searchInput.value);
     }
