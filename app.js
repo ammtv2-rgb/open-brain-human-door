@@ -50,6 +50,17 @@ function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function formatClosedAt(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
 function commaStringToArray(value) {
   return String(value || '')
     .split(',')
@@ -260,6 +271,11 @@ function renderList(rows, targetEl, emptyMessage) {
     const topics = safeArray(row.topics);
     const status = getEffectiveLoopStatus(row);
 
+    const closedAtDisplay =
+      status === 'closed' && row.closed_at
+        ? `<div class="memory-closed-at">Closed on: ${escapeHtml(formatClosedAt(row.closed_at))}</div>`
+        : '';
+
     return `
       <article class="memory-card">
         <div class="memory-topline">
@@ -274,6 +290,8 @@ function renderList(rows, targetEl, emptyMessage) {
             ${status === 'open' ? '🔴 Open' : status === 'closed' ? '🟢 Closed' : '⚪ Neutral'}
           </span>
         </div>
+
+        ${closedAtDisplay}
 
         ${
           people.length || topics.length
@@ -296,15 +314,15 @@ function renderList(rows, targetEl, emptyMessage) {
             : ''
         }
 
-  <div class="card-actions">
-  ${
-    status === 'open'
-      ? `<button class="card-close-btn" data-close-id="${escapeHtml(row.id)}">Mark Closed</button>`
-      : ''
-  }
-  <button class="card-edit-btn" data-edit-id="${escapeHtml(row.id)}">Edit</button>
-  <button class="card-delete-btn" data-delete-id="${escapeHtml(row.id)}">Delete</button>
-</div>     
+        <div class="card-actions">
+          ${
+            status === 'open'
+              ? `<button class="card-close-btn" data-close-id="${escapeHtml(row.id)}">Mark Closed</button>`
+              : ''
+          }
+          <button class="card-edit-btn" data-edit-id="${escapeHtml(row.id)}">Edit</button>
+          <button class="card-delete-btn" data-delete-id="${escapeHtml(row.id)}">Delete</button>
+        </div>
       </article>
     `;
   }).join('');
@@ -315,12 +333,14 @@ function renderList(rows, targetEl, emptyMessage) {
       openEditor(rowId);
     });
   });
-targetEl.querySelectorAll('[data-close-id]').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const rowId = btn.getAttribute('data-close-id');
-    await markAsClosed(rowId);
+
+  targetEl.querySelectorAll('[data-close-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rowId = btn.getAttribute('data-close-id');
+      await markAsClosed(rowId);
+    });
   });
-});
+
   targetEl.querySelectorAll('[data-delete-id]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const rowId = btn.getAttribute('data-delete-id');
@@ -435,6 +455,7 @@ async function markAsClosed(rowId) {
 
   await loadMemories();
 }
+
 // ---------- DELETE ----------
 async function deleteMemory(rowId) {
   const row = allMemories.find(item => String(item.id) === String(rowId));
@@ -560,7 +581,7 @@ async function loadMemories() {
 
   const { data, error } = await supabase
     .from('memories')
-    .select('id, created_at, content, people, topics, action_items, type, is_open_loop, loop_status')
+    .select('id, created_at, content, people, topics, action_items, type, is_open_loop, loop_status, closed_at')
     .order('created_at', { ascending: false })
     .limit(200);
 
