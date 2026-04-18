@@ -204,7 +204,11 @@ body {
   font-size: 13px;
   color: #64748b;
 }
-
+.memory-closed-at {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #666;
+}
 .memory-content {
   font-size: 16px;
   line-height: 1.5;
