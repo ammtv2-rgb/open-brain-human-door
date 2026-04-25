@@ -722,6 +722,11 @@ if (modalBackdrop) modalBackdrop.addEventListener('click', closeEditor);
 if (saveBtn) saveBtn.addEventListener('click', saveChanges);
 
 // ---------- INIT ----------
+// ---------- INIT ----------
 injectFilterBar();
-injectRecentlyCompletedSection();
 loadMemories();
+
+// Ensure Recently Completed loads AFTER DOM + data
+setTimeout(() => {
+  injectRecentlyCompletedSection();
+}, 300);
