@@ -61,6 +61,11 @@ function formatClosedAt(value) {
   });
 }
 
+function getClosedTime(row) {
+  if (!row.closed_at) return 0;
+  return new Date(row.closed_at).getTime() || 0;
+}
+
 function commaStringToArray(value) {
   return String(value || '')
     .split(',')
@@ -165,6 +170,28 @@ function detectOpenLoop(rawText) {
   };
 }
 
+// ---------- SORTING ----------
+function sortRowsForCurrentFilter(rows) {
+  const copiedRows = [...rows];
+
+  if (currentFilter === 'closed') {
+    return copiedRows.sort((a, b) => getClosedTime(b) - getClosedTime(a));
+  }
+
+  return copiedRows.sort((a, b) => {
+    const aTime = new Date(a.created_at).getTime() || 0;
+    const bTime = new Date(b.created_at).getTime() || 0;
+    return bTime - aTime;
+  });
+}
+
+function getRecentlyClosedRows(rows) {
+  return rows
+    .filter(row => getEffectiveLoopStatus(row) === 'closed' && row.closed_at)
+    .sort((a, b) => getClosedTime(b) - getClosedTime(a))
+    .slice(0, 10);
+}
+
 // ---------- FILTERS ----------
 function applyFilter(rows) {
   if (currentFilter === 'open') {
@@ -228,6 +255,31 @@ function injectFilterBar() {
   memoryList.parentNode.insertBefore(wrap, memoryList);
 }
 
+function injectRecentlyCompletedSection() {
+  if (document.getElementById('recentlyCompletedSection')) return;
+  if (!memoryList) return;
+
+  const section = document.createElement('section');
+  section.id = 'recentlyCompletedSection';
+  section.className = 'recently-completed-section';
+
+  section.innerHTML = `
+    <div class="section-header">
+      <h2>Recently Completed</h2>
+      <p>Your latest closed memories, sorted by completion time.</p>
+    </div>
+    <div id="recentlyCompletedList"></div>
+  `;
+
+  const filterWrap = document.getElementById('memoryFilterWrap');
+
+  if (filterWrap && filterWrap.parentNode) {
+    filterWrap.parentNode.insertBefore(section, filterWrap);
+  } else {
+    memoryList.parentNode.insertBefore(section, memoryList);
+  }
+}
+
 function updateMemoryListLabel() {
   const label = document.getElementById('memoryListLabel');
   if (!label) return;
@@ -237,7 +289,7 @@ function updateMemoryListLabel() {
   } else if (currentFilter === 'open') {
     label.textContent = 'Showing: Open memories';
   } else if (currentFilter === 'closed') {
-    label.textContent = 'Showing: Closed memories';
+    label.textContent = 'Showing: Closed memories, newest closed first';
   } else if (currentFilter === 'neutral') {
     label.textContent = 'Showing: Neutral memories';
   }
@@ -276,8 +328,10 @@ function renderList(rows, targetEl, emptyMessage) {
         ? `<div class="memory-closed-at">Closed on: ${escapeHtml(formatClosedAt(row.closed_at))}</div>`
         : '';
 
+    const closedCardClass = status === 'closed' ? 'memory-card-closed' : '';
+
     return `
-      <article class="memory-card">
+      <article class="memory-card ${closedCardClass}">
         <div class="memory-topline">
           <span class="${badgeClass(row.type)}">${escapeHtml(row.type || 'memory')}</span>
           <span class="memory-date">${escapeHtml(formatDate(row.created_at))}</span>
@@ -349,9 +403,29 @@ function renderList(rows, targetEl, emptyMessage) {
   });
 }
 
+function renderRecentlyCompleted() {
+  const section = document.getElementById('recentlyCompletedSection');
+  const list = document.getElementById('recentlyCompletedList');
+
+  if (!section || !list) return;
+
+  const shouldShowRecentlyCompleted = currentFilter === 'all' || currentFilter === 'closed';
+  section.style.display = shouldShowRecentlyCompleted ? 'block' : 'none';
+
+  if (!shouldShowRecentlyCompleted) return;
+
+  const recentlyClosedRows = getRecentlyClosedRows(allMemories);
+
+  renderList(
+    recentlyClosedRows,
+    list,
+    'No recently completed memories yet.'
+  );
+}
+
 function renderApp() {
   const priorityRows = allMemories.filter(hasOpenActionItems);
-  const filteredRows = applyFilter(allMemories);
+  const filteredRows = sortRowsForCurrentFilter(applyFilter(allMemories));
 
   const prioritySection = document.querySelector('.priority-section');
   const shouldShowPriority = currentFilter === 'all' || currentFilter === 'open';
@@ -365,6 +439,8 @@ function renderApp() {
   if (shouldShowPriority) {
     renderList(priorityRows, priorityList, 'No open action items found.');
   }
+
+  renderRecentlyCompleted();
 
   renderList(filteredRows, memoryList, 'No memories found for this filter.');
 
@@ -409,6 +485,14 @@ async function saveChanges() {
     is_open_loop: loopFields.is_open_loop,
     loop_status: loopFields.loop_status
   };
+
+  if (loopFields.loop_status === 'closed') {
+    payload.closed_at = currentEditRow.closed_at || new Date().toISOString();
+  }
+
+  if (loopFields.loop_status !== 'closed') {
+    payload.closed_at = null;
+  }
 
   if (saveBtn) {
     saveBtn.textContent = 'Saving...';
@@ -527,6 +611,10 @@ async function saveMemory() {
     loop_status: loopFields.loop_status
   };
 
+  if (loopFields.loop_status === 'closed') {
+    payload.closed_at = new Date().toISOString();
+  }
+
   const { error } = await supabase
     .from('memories')
     .insert([payload]);
@@ -635,4 +723,5 @@ if (saveBtn) saveBtn.addEventListener('click', saveChanges);
 
 // ---------- INIT ----------
 injectFilterBar();
+injectRecentlyCompletedSection();
 loadMemories();
