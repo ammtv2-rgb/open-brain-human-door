@@ -305,8 +305,15 @@ function renderList(rows, targetEl, emptyMessage) {
 
     const closedCardClass = status === 'closed' ? 'memory-card-closed' : '';
 
+    const cardStyle =
+      status === 'closed'
+        ? 'style="opacity:0.45;background:#f1f5f9;border-color:#cbd5e1;box-shadow:none;"'
+        : status === 'open'
+          ? 'style="background:#fffaf5;border-color:#f97316;box-shadow:0 6px 18px rgba(249,115,22,0.16);"'
+          : '';
+
     return `
-      <article class="memory-card ${closedCardClass}">
+      <article class="memory-card ${closedCardClass}" ${cardStyle}>
         <div class="memory-topline">
           <span class="${badgeClass(row.type)}">${escapeHtml(row.type || 'memory')}</span>
           <span class="memory-date">${escapeHtml(formatDate(row.created_at))}</span>
@@ -336,7 +343,7 @@ function renderList(rows, targetEl, emptyMessage) {
         ${
           actions.length
             ? `
-            <div class="action-box">
+            <div class="action-box" style="line-height:1.5;overflow-wrap:anywhere;word-break:break-word;">
               <strong>Action items:</strong> ${actions.map(escapeHtml).join(', ')}
             </div>
             `
