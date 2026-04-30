@@ -593,6 +593,48 @@ function renderRecentlyCompleted() {
   );
 }
 
+function renderStaleOpen() {
+  let section = document.getElementById('staleOpenSection');
+
+  if (!section) {
+    section = document.createElement('section');
+    section.id = 'staleOpenSection';
+    section.className = 'recently-completed-section';
+
+    section.innerHTML = `
+      <div class="section-header">
+        <h2>Stale Open Loops</h2>
+        <p>Open items older than 7 days that need attention.</p>
+      </div>
+      <div id="staleOpenList" class="card-list"></div>
+    `;
+
+    const recentlyCompletedSection = document.getElementById('recentlyCompletedSection');
+
+    if (recentlyCompletedSection && recentlyCompletedSection.parentNode) {
+      recentlyCompletedSection.parentNode.insertBefore(section, recentlyCompletedSection.nextSibling);
+    } else if (memoryList && memoryList.parentNode) {
+      memoryList.parentNode.insertBefore(section, memoryList);
+    }
+  }
+
+  const list = document.getElementById('staleOpenList');
+  if (!section || !list) return;
+
+  const shouldShow = currentFilter === 'all' || currentFilter === 'open';
+  section.style.display = shouldShow ? 'block' : 'none';
+
+  if (!shouldShow) return;
+
+  const staleRows = getStaleOpenRows(allMemories);
+
+  renderList(
+    staleRows,
+    list,
+    'No stale open loops 🎉'
+  );
+}
+
 function renderApp() {
   const priorityRows = allMemories.filter(hasOpenActionItems);
   const filteredRows = sortRowsForCurrentFilter(applyFilter(allMemories));
@@ -611,6 +653,7 @@ function renderApp() {
   }
 
   renderRecentlyCompleted();
+  renderStaleOpen();
 
   renderList(filteredRows, memoryList, 'No memories found for this filter.');
 
