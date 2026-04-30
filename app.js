@@ -309,25 +309,65 @@ function injectCompletedTodayCard() {
   closedCard.parentNode.insertBefore(completedTodayCard, closedCard.nextSibling);
 }
 
+function isThisWeek(value) {
+  if (!value) return false;
+
+  const date = new Date(value);
+  const today = new Date();
+
+  const firstDayOfWeek = new Date(today);
+  firstDayOfWeek.setDate(today.getDate() - today.getDay());
+
+  const lastDayOfWeek = new Date(firstDayOfWeek);
+  lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 6);
+
+  return date >= firstDayOfWeek && date <= lastDayOfWeek;
+}
+
 function updateDashboard(rows) {
   injectCompletedTodayCard();
+
+  let weekCountEl = document.getElementById('completedWeekCount');
+
+  if (!weekCountEl) {
+    const todayCard = document.getElementById('completedTodayCount')?.closest('.dashboard-filter-card');
+
+    if (todayCard && todayCard.parentNode) {
+      const weekCard = document.createElement('div');
+      weekCard.className = 'dashboard-filter-card';
+
+      weekCard.innerHTML = `
+        <div class="stat-number" id="completedWeekCount">0</div>
+        <div class="stat-label">Completed This Week</div>
+      `;
+
+      todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
+      weekCountEl = document.getElementById('completedWeekCount');
+    }
+  }
 
   const completedTodayCount = document.getElementById('completedTodayCount');
 
   const total = rows.length;
-  const open = rows.filter(row => getEffectiveLoopStatus(row) === 'open').length;
-  const closed = rows.filter(row => getEffectiveLoopStatus(row) === 'closed').length;
-  const neutral = rows.filter(row => getEffectiveLoopStatus(row) === 'neutral').length;
+  const open = rows.filter(r => getEffectiveLoopStatus(r) === 'open').length;
+  const closed = rows.filter(r => getEffectiveLoopStatus(r) === 'closed').length;
+  const neutral = rows.filter(r => getEffectiveLoopStatus(r) === 'neutral').length;
 
-  const completedToday = rows.filter(row => {
-    return getEffectiveLoopStatus(row) === 'closed' && isToday(row.closed_at);
-  }).length;
+  const completedToday = rows.filter(r =>
+    getEffectiveLoopStatus(r) === 'closed' && isToday(r.closed_at)
+  ).length;
+
+  const completedWeek = rows.filter(r =>
+    getEffectiveLoopStatus(r) === 'closed' && isThisWeek(r.closed_at)
+  ).length;
 
   if (totalMemoriesCount) totalMemoriesCount.textContent = total;
   if (openLoopsCount) openLoopsCount.textContent = open;
   if (neutralCount) neutralCount.textContent = neutral;
   if (closedCount) closedCount.textContent = closed;
+
   if (completedTodayCount) completedTodayCount.textContent = completedToday;
+  if (weekCountEl) weekCountEl.textContent = completedWeek;
 }
 
 // ---------- RENDER ----------
