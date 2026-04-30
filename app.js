@@ -66,6 +66,21 @@ function getClosedTime(row) {
   return new Date(row.closed_at).getTime() || 0;
 }
 
+function isToday(value) {
+  if (!value) return false;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const today = new Date();
+
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+}
+
 function commaStringToArray(value) {
   return String(value || '')
     .split(',')
@@ -271,16 +286,48 @@ function updateMemoryListLabel() {
 }
 
 // ---------- DASHBOARD ----------
+function injectCompletedTodayCard() {
+  if (document.getElementById('completedTodayCount')) return;
+
+  const closedCard = closedCount ? closedCount.closest('.dashboard-filter-card') : null;
+  if (!closedCard || !closedCard.parentNode) return;
+
+  const completedTodayCard = document.createElement('div');
+  completedTodayCard.className = 'dashboard-filter-card';
+  completedTodayCard.dataset.filter = 'closed';
+  completedTodayCard.style.cursor = 'pointer';
+
+  completedTodayCard.innerHTML = `
+    <div class="stat-number" id="completedTodayCount">0</div>
+    <div class="stat-label">Completed Today</div>
+  `;
+
+  completedTodayCard.addEventListener('click', () => {
+    setFilter('closed');
+  });
+
+  closedCard.parentNode.insertBefore(completedTodayCard, closedCard.nextSibling);
+}
+
 function updateDashboard(rows) {
+  injectCompletedTodayCard();
+
+  const completedTodayCount = document.getElementById('completedTodayCount');
+
   const total = rows.length;
   const open = rows.filter(row => getEffectiveLoopStatus(row) === 'open').length;
   const closed = rows.filter(row => getEffectiveLoopStatus(row) === 'closed').length;
   const neutral = rows.filter(row => getEffectiveLoopStatus(row) === 'neutral').length;
 
+  const completedToday = rows.filter(row => {
+    return getEffectiveLoopStatus(row) === 'closed' && isToday(row.closed_at);
+  }).length;
+
   if (totalMemoriesCount) totalMemoriesCount.textContent = total;
   if (openLoopsCount) openLoopsCount.textContent = open;
   if (neutralCount) neutralCount.textContent = neutral;
   if (closedCount) closedCount.textContent = closed;
+  if (completedTodayCount) completedTodayCount.textContent = completedToday;
 }
 
 // ---------- RENDER ----------
