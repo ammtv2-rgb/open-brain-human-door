@@ -206,6 +206,27 @@ function getRecentlyClosedRows(rows) {
     .sort((a, b) => getClosedTime(b) - getClosedTime(a))
     .slice(0, 10);
 }
+function getStaleOpenRows(rows) {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  return rows
+    .filter(row => {
+      const createdTime = new Date(row.created_at);
+      return (
+        getEffectiveLoopStatus(row) === 'open' &&
+        !Number.isNaN(createdTime.getTime()) &&
+        createdTime < sevenDaysAgo
+      );
+    })
+    .sort((a, b) => {
+      const aTime = new Date(a.created_at).getTime() || 0;
+      const bTime = new Date(b.created_at).getTime() || 0;
+      return aTime - bTime;
+    })
+    .slice(0, 10);
+}
+
 
 // ---------- FILTERS ----------
 function applyFilter(rows) {
@@ -360,6 +381,10 @@ function updateDashboard(rows) {
   const completedWeek = rows.filter(r =>
     getEffectiveLoopStatus(r) === 'closed' && isThisWeek(r.closed_at)
   ).length;
+  const recentlyAdded = rows.filter(r =>
+    isToday(r.created_at)
+  ).length;
+  
 
   if (totalMemoriesCount) totalMemoriesCount.textContent = total;
   if (openLoopsCount) openLoopsCount.textContent = open;
@@ -368,6 +393,60 @@ function updateDashboard(rows) {
 
   if (completedTodayCount) completedTodayCount.textContent = completedToday;
   if (weekCountEl) weekCountEl.textContent = completedWeek;
+  let addedEl = document.getElementById('recentlyAddedCount');
+
+  if (!addedEl) {
+    const weekCard = document.getElementById('completedWeekCount')?.closest('.dashboard-filter-card');
+
+    if (weekCard && weekCard.parentNode) {
+      const card = document.createElement('div');
+      card.className = 'dashboard-filter-card';
+
+      card.innerHTML = `
+        <div class="stat-number" id="recentlyAddedCount">0</div>
+        <div class="stat-label">Recently Added</div>
+      `;
+
+      weekCard.parentNode.insertBefore(card, weekCard.nextSibling);
+      addedEl = document.getElementById('recentlyAddedCount');
+    }
+  }
+
+  if (addedEl) addedEl.textContent = recentlyAdded;
+  let staleEl = document.getElementById('staleOpenCount');
+
+  const staleOpen = rows.filter(r => {
+    const createdTime = new Date(r.created_at);
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    return (
+      getEffectiveLoopStatus(r) === 'open' &&
+      !Number.isNaN(createdTime.getTime()) &&
+      createdTime < sevenDaysAgo
+    );
+  }).length;
+
+  if (!staleEl) {
+    const addedCard = document.getElementById('recentlyAddedCount')?.closest('.dashboard-filter-card');
+
+    if (addedCard && addedCard.parentNode) {
+      const card = document.createElement('div');
+      card.className = 'dashboard-filter-card';
+
+      card.innerHTML = `
+        <div class="stat-number" id="staleOpenCount">0</div>
+        <div class="stat-label">Stale Open</div>
+      `;
+
+      addedCard.parentNode.insertBefore(card, addedCard.nextSibling);
+      staleEl = document.getElementById('staleOpenCount');
+    }
+  }
+
+  if (staleEl) staleEl.textContent = staleOpen;
+  
+  
 }
 
 // ---------- RENDER ----------
