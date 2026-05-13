@@ -376,11 +376,17 @@ function updateDashboard(rows) {
       weekCard.className = 'dashboard-filter-card';
 
       weekCard.innerHTML = `
-        <div class="stat-number" id="completedWeekCount">0</div>
-        <div class="stat-label">Completed This Week</div>
-      `;
+  <div class="stat-number" id="completedWeekCount">0</div>
+  <div class="stat-label">Completed This Week</div>
+`;
 
-      todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
+weekCard.style.cursor = 'pointer';
+
+weekCard.addEventListener('click', () => {
+  setFilterAndScroll('closed', 'recentlyCompletedSection');
+});
+
+todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
       weekCountEl = document.getElementById('completedWeekCount');
     }
   }
