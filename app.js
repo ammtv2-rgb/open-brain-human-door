@@ -244,7 +244,25 @@ function applyFilter(rows) {
 
   return rows;
 }
+function scrollToSection(sectionId) {
+  setTimeout(() => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
 
+    section.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }, 100);
+}
+
+function setFilterAndScroll(filter, sectionId) {
+  currentFilter = filter;
+  updateFilterButtons();
+  updateDashboardCardStates();
+  renderApp();
+  scrollToSection(sectionId);
+}
 function setFilter(filter) {
   currentFilter = filter;
   updateFilterButtons();
