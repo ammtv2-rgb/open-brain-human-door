@@ -244,6 +244,22 @@ function applyFilter(rows) {
 
   return rows;
 }
+function highlightSection(sectionId) {
+  const section = document.getElementById(sectionId);
+
+  if (!section) return;
+
+  section.classList.remove('highlight-section');
+
+  void section.offsetWidth;
+
+  section.classList.add('highlight-section');
+
+  setTimeout(() => {
+    section.classList.remove('highlight-section');
+  }, 2000);
+}
+
 function scrollToSection(sectionId) {
   setTimeout(() => {
     const section = document.getElementById(sectionId);
@@ -253,6 +269,8 @@ function scrollToSection(sectionId) {
       behavior: 'smooth',
       block: 'start'
     });
+
+    highlightSection(sectionId);
   }, 100);
 }
 
