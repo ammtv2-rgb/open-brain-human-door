@@ -464,13 +464,19 @@ addedEl = document.getElementById('recentlyAddedCount');
       const card = document.createElement('div');
       card.className = 'dashboard-filter-card';
 
-      card.innerHTML = `
-        <div class="stat-number" id="staleOpenCount">0</div>
-        <div class="stat-label">Stale Open</div>
-      `;
+  card.innerHTML = `
+  <div class="stat-number" id="staleOpenCount">0</div>
+  <div class="stat-label">Stale Open</div>
+`;
 
-      addedCard.parentNode.insertBefore(card, addedCard.nextSibling);
-      staleEl = document.getElementById('staleOpenCount');
+card.style.cursor = 'pointer';
+
+card.addEventListener('click', () => {
+  setFilterAndScroll('open', 'staleOpenSection');
+});
+
+addedCard.parentNode.insertBefore(card, addedCard.nextSibling);
+staleEl = document.getElementById('staleOpenCount');
     }
   }
 
