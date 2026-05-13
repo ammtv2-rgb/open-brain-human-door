@@ -342,8 +342,8 @@ function injectCompletedTodayCard() {
   `;
 
   completedTodayCard.addEventListener('click', () => {
-    setFilter('closed');
-  });
+  setFilterAndScroll('closed', 'recentlyCompletedSection');
+});
 
   closedCard.parentNode.insertBefore(completedTodayCard, closedCard.nextSibling);
 }
