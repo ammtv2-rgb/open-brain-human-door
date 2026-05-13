@@ -206,6 +206,7 @@ function getRecentlyClosedRows(rows) {
     .sort((a, b) => getClosedTime(b) - getClosedTime(a))
     .slice(0, 10);
 }
+
 function getStaleOpenRows(rows) {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -227,7 +228,6 @@ function getStaleOpenRows(rows) {
     .slice(0, 10);
 }
 
-
 // ---------- FILTERS ----------
 function applyFilter(rows) {
   if (currentFilter === 'open') {
@@ -244,6 +244,7 @@ function applyFilter(rows) {
 
   return rows;
 }
+
 function highlightSection(sectionId) {
   const section = document.getElementById(sectionId);
 
@@ -281,6 +282,7 @@ function setFilterAndScroll(filter, sectionId) {
   renderApp();
   scrollToSection(sectionId);
 }
+
 function setFilter(filter) {
   currentFilter = filter;
   updateFilterButtons();
@@ -360,8 +362,8 @@ function injectCompletedTodayCard() {
   `;
 
   completedTodayCard.addEventListener('click', () => {
-  setFilterAndScroll('closed', 'recentlyCompletedSection');
-});
+    setFilterAndScroll('closed', 'recentlyCompletedSection');
+  });
 
   closedCard.parentNode.insertBefore(completedTodayCard, closedCard.nextSibling);
 }
@@ -394,17 +396,17 @@ function updateDashboard(rows) {
       weekCard.className = 'dashboard-filter-card';
 
       weekCard.innerHTML = `
-  <div class="stat-number" id="completedWeekCount">0</div>
-  <div class="stat-label">Completed This Week</div>
-`;
+        <div class="stat-number" id="completedWeekCount">0</div>
+        <div class="stat-label">Completed This Week</div>
+      `;
 
-weekCard.style.cursor = 'pointer';
+      weekCard.style.cursor = 'pointer';
 
-weekCard.addEventListener('click', () => {
-  setFilterAndScroll('closed', 'recentlyCompletedSection');
-});
+      weekCard.addEventListener('click', () => {
+        setFilterAndScroll('closed', 'recentlyCompletedSection');
+      });
 
-todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
+      todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
       weekCountEl = document.getElementById('completedWeekCount');
     }
   }
@@ -423,10 +425,10 @@ todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
   const completedWeek = rows.filter(r =>
     getEffectiveLoopStatus(r) === 'closed' && isThisWeek(r.closed_at)
   ).length;
+
   const recentlyAdded = rows.filter(r =>
     isToday(r.created_at)
   ).length;
-  
 
   if (totalMemoriesCount) totalMemoriesCount.textContent = total;
   if (openLoopsCount) openLoopsCount.textContent = open;
@@ -435,6 +437,7 @@ todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
 
   if (completedTodayCount) completedTodayCount.textContent = completedToday;
   if (weekCountEl) weekCountEl.textContent = completedWeek;
+
   let addedEl = document.getElementById('recentlyAddedCount');
 
   if (!addedEl) {
@@ -444,23 +447,24 @@ todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
       const card = document.createElement('div');
       card.className = 'dashboard-filter-card';
 
-     card.innerHTML = `
-  <div class="stat-number" id="recentlyAddedCount">0</div>
-  <div class="stat-label">Recently Added</div>
-`;
+      card.innerHTML = `
+        <div class="stat-number" id="recentlyAddedCount">0</div>
+        <div class="stat-label">Recently Added</div>
+      `;
 
-card.style.cursor = 'pointer';
+      card.style.cursor = 'pointer';
 
-card.addEventListener('click', () => {
-  setFilterAndScroll('all', 'memoryList');
-});
+      card.addEventListener('click', () => {
+        setFilterAndScroll('all', 'memoryList');
+      });
 
-weekCard.parentNode.insertBefore(card, weekCard.nextSibling);
-addedEl = document.getElementById('recentlyAddedCount');
+      weekCard.parentNode.insertBefore(card, weekCard.nextSibling);
+      addedEl = document.getElementById('recentlyAddedCount');
     }
   }
 
   if (addedEl) addedEl.textContent = recentlyAdded;
+
   let staleEl = document.getElementById('staleOpenCount');
 
   const staleOpen = rows.filter(r => {
@@ -482,25 +486,23 @@ addedEl = document.getElementById('recentlyAddedCount');
       const card = document.createElement('div');
       card.className = 'dashboard-filter-card';
 
-  card.innerHTML = `
-  <div class="stat-number" id="staleOpenCount">0</div>
-  <div class="stat-label">Stale Open</div>
-`;
+      card.innerHTML = `
+        <div class="stat-number" id="staleOpenCount">0</div>
+        <div class="stat-label">Stale Open</div>
+      `;
 
-card.style.cursor = 'pointer';
+      card.style.cursor = 'pointer';
 
-card.addEventListener('click', () => {
-  setFilterAndScroll('open', 'staleOpenSection');
-});
+      card.addEventListener('click', () => {
+        setFilterAndScroll('open', 'staleOpenList');
+      });
 
-addedCard.parentNode.insertBefore(card, addedCard.nextSibling);
-staleEl = document.getElementById('staleOpenCount');
+      addedCard.parentNode.insertBefore(card, addedCard.nextSibling);
+      staleEl = document.getElementById('staleOpenCount');
     }
   }
 
   if (staleEl) staleEl.textContent = staleOpen;
-  
-  
 }
 
 // ---------- RENDER ----------
