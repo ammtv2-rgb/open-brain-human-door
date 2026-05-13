@@ -426,13 +426,19 @@ todayCard.parentNode.insertBefore(weekCard, todayCard.nextSibling);
       const card = document.createElement('div');
       card.className = 'dashboard-filter-card';
 
-      card.innerHTML = `
-        <div class="stat-number" id="recentlyAddedCount">0</div>
-        <div class="stat-label">Recently Added</div>
-      `;
+     card.innerHTML = `
+  <div class="stat-number" id="recentlyAddedCount">0</div>
+  <div class="stat-label">Recently Added</div>
+`;
 
-      weekCard.parentNode.insertBefore(card, weekCard.nextSibling);
-      addedEl = document.getElementById('recentlyAddedCount');
+card.style.cursor = 'pointer';
+
+card.addEventListener('click', () => {
+  setFilterAndScroll('all', 'memoryList');
+});
+
+weekCard.parentNode.insertBefore(card, weekCard.nextSibling);
+addedEl = document.getElementById('recentlyAddedCount');
     }
   }
 
