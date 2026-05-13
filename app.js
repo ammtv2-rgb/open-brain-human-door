@@ -242,6 +242,10 @@ function applyFilter(rows) {
     return rows.filter(row => getEffectiveLoopStatus(row) === 'neutral');
   }
 
+  if (currentFilter === 'stale') {
+    return getStaleOpenRows(rows);
+  }
+
   return rows;
 }
 
@@ -299,7 +303,7 @@ function updateFilterButtons() {
 }
 
 function updateDashboardCardStates() {
-  dashboardCards.forEach(card => {
+  document.querySelectorAll('.dashboard-filter-card').forEach(card => {
     card.classList.toggle('active', card.dataset.filter === currentFilter);
   });
 
@@ -341,6 +345,8 @@ function updateMemoryListLabel() {
     label.textContent = 'Showing: Closed memories, newest closed first';
   } else if (currentFilter === 'neutral') {
     label.textContent = 'Showing: Neutral memories';
+  } else if (currentFilter === 'stale') {
+    label.textContent = 'Showing: Stale open loops only';
   }
 }
 
@@ -394,6 +400,7 @@ function updateDashboard(rows) {
     if (todayCard && todayCard.parentNode) {
       const weekCard = document.createElement('div');
       weekCard.className = 'dashboard-filter-card';
+      weekCard.dataset.filter = 'closed';
 
       weekCard.innerHTML = `
         <div class="stat-number" id="completedWeekCount">0</div>
@@ -446,6 +453,7 @@ function updateDashboard(rows) {
     if (weekCard && weekCard.parentNode) {
       const card = document.createElement('div');
       card.className = 'dashboard-filter-card';
+      card.dataset.filter = 'all';
 
       card.innerHTML = `
         <div class="stat-number" id="recentlyAddedCount">0</div>
@@ -467,17 +475,7 @@ function updateDashboard(rows) {
 
   let staleEl = document.getElementById('staleOpenCount');
 
-  const staleOpen = rows.filter(r => {
-    const createdTime = new Date(r.created_at);
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    return (
-      getEffectiveLoopStatus(r) === 'open' &&
-      !Number.isNaN(createdTime.getTime()) &&
-      createdTime < sevenDaysAgo
-    );
-  }).length;
+  const staleOpen = getStaleOpenRows(rows).length;
 
   if (!staleEl) {
     const addedCard = document.getElementById('recentlyAddedCount')?.closest('.dashboard-filter-card');
@@ -485,6 +483,7 @@ function updateDashboard(rows) {
     if (addedCard && addedCard.parentNode) {
       const card = document.createElement('div');
       card.className = 'dashboard-filter-card';
+      card.dataset.filter = 'stale';
 
       card.innerHTML = `
         <div class="stat-number" id="staleOpenCount">0</div>
@@ -494,7 +493,7 @@ function updateDashboard(rows) {
       card.style.cursor = 'pointer';
 
       card.addEventListener('click', () => {
-        setFilterAndScroll('open', 'staleOpenList');
+        setFilterAndScroll('stale', 'staleOpenSection');
       });
 
       addedCard.parentNode.insertBefore(card, addedCard.nextSibling);
@@ -677,7 +676,11 @@ function renderStaleOpen() {
   const list = document.getElementById('staleOpenList');
   if (!section || !list) return;
 
-  const shouldShow = currentFilter === 'all' || currentFilter === 'open';
+  const shouldShow =
+    currentFilter === 'all' ||
+    currentFilter === 'open' ||
+    currentFilter === 'stale';
+
   section.style.display = shouldShow ? 'block' : 'none';
 
   if (!shouldShow) return;
@@ -696,12 +699,19 @@ function renderApp() {
   const filteredRows = sortRowsForCurrentFilter(applyFilter(allMemories));
 
   const prioritySection = document.querySelector('.priority-section');
+  const allSection = document.querySelector('.all-section');
+
   const shouldShowPriority = currentFilter === 'all' || currentFilter === 'open';
+  const shouldShowAllSection = currentFilter !== 'stale';
 
   updateDashboard(allMemories);
 
   if (prioritySection) {
     prioritySection.style.display = shouldShowPriority ? 'block' : 'none';
+  }
+
+  if (allSection) {
+    allSection.style.display = shouldShowAllSection ? 'block' : 'none';
   }
 
   if (shouldShowPriority) {
@@ -711,7 +721,9 @@ function renderApp() {
   renderRecentlyCompleted();
   renderStaleOpen();
 
-  renderList(filteredRows, memoryList, 'No memories found for this filter.');
+  if (shouldShowAllSection) {
+    renderList(filteredRows, memoryList, 'No memories found for this filter.');
+  }
 
   updateFilterButtons();
   updateDashboardCardStates();
