@@ -37,6 +37,7 @@ const dashboardCards = document.querySelectorAll('.dashboard-filter-card');
 let allMemories = [];
 let currentEditRow = null;
 let currentFilter = 'all';
+let currentSearchQuery = '';
 
 // ---------- HELPERS ----------
 function safeArray(value) {
@@ -248,7 +249,26 @@ function applyFilter(rows) {
 
   return rows;
 }
+function applySearch(rows) {
+  const query = String(currentSearchQuery || '').trim().toLowerCase();
 
+  if (!query) return rows;
+
+  return rows.filter(row => {
+    const searchableText = [
+      row.content,
+      row.type,
+      ...safeArray(row.people),
+      ...safeArray(row.topics),
+      ...safeArray(row.action_items),
+      row.loop_status
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return searchableText.includes(query);
+  });
+}
 function highlightSection(sectionId) {
   const section = document.getElementById(sectionId);
 
@@ -695,8 +715,9 @@ function renderStaleOpen() {
 }
 
 function renderApp() {
-  const priorityRows = allMemories.filter(hasOpenActionItems);
-  const filteredRows = sortRowsForCurrentFilter(applyFilter(allMemories));
+  const searchedRows = applySearch(allMemories);
+  const priorityRows = searchedRows.filter(hasOpenActionItems);
+  const filteredRows = sortRowsForCurrentFilter(applyFilter(searchedRows));
 
   const prioritySection = document.querySelector('.priority-section');
   const allSection = document.querySelector('.all-section');
@@ -914,32 +935,10 @@ async function saveMemory() {
 }
 
 // ---------- SEARCH ----------
+// ---------- SEARCH ----------
 async function runAISearch(query) {
-  try {
-    const q = String(query || '').trim();
-
-    if (!q) {
-      await loadMemories();
-      return;
-    }
-
-    const { data, error } = await supabase.functions.invoke('search-memory', {
-  body: {
-    query: q,
-    filter: currentFilter
-  }
-});
-
-    if (error) {
-      console.error('AI search error:', error);
-      return;
-    }
-
-    allMemories = Array.isArray(data) ? data : (data?.data || []);
-    renderApp();
-  } catch (err) {
-    console.error('runAISearch failed:', err);
-  }
+  currentSearchQuery = String(query || '').trim();
+  renderApp();
 }
 
 // ---------- LOAD ----------
@@ -982,9 +981,14 @@ if (dashboardCards.length) {
 }
 
 if (searchInput) {
-  searchInput.addEventListener('keydown', async event => {
+  searchInput.addEventListener('input', () => {
+    runAISearch(searchInput.value);
+  });
+
+  searchInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') {
-      await runAISearch(searchInput.value);
+      event.preventDefault();
+      runAISearch(searchInput.value);
     }
   });
 }
