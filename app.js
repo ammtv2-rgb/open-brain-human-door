@@ -924,8 +924,11 @@ async function runAISearch(query) {
     }
 
     const { data, error } = await supabase.functions.invoke('search-memory', {
-      body: { query: q }
-    });
+  body: {
+    query: q,
+    filter: currentFilter
+  }
+});
 
     if (error) {
       console.error('AI search error:', error);
