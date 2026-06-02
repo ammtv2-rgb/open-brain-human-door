@@ -39,6 +39,12 @@ let currentEditRow = null;
 let currentFilter = 'all';
 let currentSearchQuery = '';
 
+let searchStatusFilter = 'all';
+let searchPersonFilter = '';
+let searchTopicFilter = '';
+let searchDateFrom = '';
+let searchDateTo = '';
+
 // ---------- HELPERS ----------
 function safeArray(value) {
   if (Array.isArray(value)) return value;
@@ -106,6 +112,21 @@ function badgeClass(type) {
   if (cleaned === 'reminder') return 'badge badge-reminder';
   if (cleaned === 'follow-up') return 'badge badge-follow-up';
   return 'badge badge-default';
+}
+
+function getMemoryDateValue(row) {
+  return row.memory_date || row.created_at || '';
+}
+
+function isSearchActive() {
+  return Boolean(
+    currentSearchQuery.trim() ||
+    searchStatusFilter !== 'all' ||
+    searchPersonFilter ||
+    searchTopicFilter ||
+    searchDateFrom ||
+    searchDateTo
+  );
 }
 
 // ---------- LOOP LOGIC ----------
@@ -201,6 +222,14 @@ function sortRowsForCurrentFilter(rows) {
   });
 }
 
+function sortRowsNewestFirst(rows) {
+  return [...rows].sort((a, b) => {
+    const aTime = new Date(a.created_at).getTime() || 0;
+    const bTime = new Date(b.created_at).getTime() || 0;
+    return bTime - aTime;
+  });
+}
+
 function getRecentlyClosedRows(rows) {
   return rows
     .filter(row => getEffectiveLoopStatus(row) === 'closed' && row.closed_at)
@@ -229,7 +258,7 @@ function getStaleOpenRows(rows) {
     .slice(0, 10);
 }
 
-// ---------- FILTERS ----------
+// ---------- NORMAL FILTERS ----------
 function applyFilter(rows) {
   if (currentFilter === 'open') {
     return rows.filter(row => getEffectiveLoopStatus(row) === 'open');
@@ -249,7 +278,9 @@ function applyFilter(rows) {
 
   return rows;
 }
-function applySearch(rows) {
+
+// ---------- SEARCH UPGRADE FILTERS ----------
+function applySearchText(rows) {
   const query = String(currentSearchQuery || '').trim().toLowerCase();
 
   if (!query) return rows;
@@ -269,6 +300,87 @@ function applySearch(rows) {
     return searchableText.includes(query);
   });
 }
+
+function applySearchStatus(rows) {
+  if (searchStatusFilter === 'all') return rows;
+
+  if (searchStatusFilter === 'stale') {
+    const staleIds = new Set(getStaleOpenRows(allMemories).map(row => String(row.id)));
+    return rows.filter(row => staleIds.has(String(row.id)));
+  }
+
+  return rows.filter(row => getEffectiveLoopStatus(row) === searchStatusFilter);
+}
+
+function applySearchPerson(rows) {
+  if (!searchPersonFilter) return rows;
+
+  return rows.filter(row =>
+    safeArray(row.people)
+      .map(person => String(person).toLowerCase())
+      .includes(searchPersonFilter.toLowerCase())
+  );
+}
+
+function applySearchTopic(rows) {
+  if (!searchTopicFilter) return rows;
+
+  return rows.filter(row =>
+    safeArray(row.topics)
+      .map(topic => String(topic).toLowerCase())
+      .includes(searchTopicFilter.toLowerCase())
+  );
+}
+
+function applySearchDateRange(rows) {
+  if (!searchDateFrom && !searchDateTo) return rows;
+
+  const fromTime = searchDateFrom
+    ? new Date(`${searchDateFrom}T00:00:00`).getTime()
+    : null;
+
+  const toTime = searchDateTo
+    ? new Date(`${searchDateTo}T23:59:59`).getTime()
+    : null;
+
+  return rows.filter(row => {
+    const dateValue = getMemoryDateValue(row);
+    const rowTime = new Date(dateValue).getTime();
+
+    if (Number.isNaN(rowTime)) return false;
+    if (fromTime !== null && rowTime < fromTime) return false;
+    if (toTime !== null && rowTime > toTime) return false;
+
+    return true;
+  });
+}
+
+function getSearchResultsRows() {
+  let rows = [...allMemories];
+
+  rows = applySearchText(rows);
+  rows = applySearchStatus(rows);
+  rows = applySearchPerson(rows);
+  rows = applySearchTopic(rows);
+  rows = applySearchDateRange(rows);
+
+  return sortRowsNewestFirst(rows);
+}
+
+function getUniqueValues(fieldName) {
+  const values = new Set();
+
+  allMemories.forEach(row => {
+    safeArray(row[fieldName]).forEach(value => {
+      const cleaned = String(value || '').trim();
+      if (cleaned) values.add(cleaned);
+    });
+  });
+
+  return Array.from(values).sort((a, b) => a.localeCompare(b));
+}
+
+// ---------- SCROLL / FILTER UI ----------
 function highlightSection(sectionId) {
   const section = document.getElementById(sectionId);
 
@@ -368,6 +480,214 @@ function updateMemoryListLabel() {
   } else if (currentFilter === 'stale') {
     label.textContent = 'Showing: Stale open loops only';
   }
+}
+
+// ---------- SEARCH UPGRADE UI ----------
+function injectSearchUpgradePanel() {
+  if (!searchInput) return;
+  if (document.getElementById('searchUpgradePanel')) return;
+
+  const panel = document.createElement('section');
+  panel.id = 'searchUpgradePanel';
+  panel.className = 'search-upgrade-panel';
+
+  panel.innerHTML = `
+    <div class="section-header">
+      <h2>Search Upgrades</h2>
+      <p>Search by text, status, person, topic, or custom date range.</p>
+    </div>
+
+    <div class="filter-wrap" id="searchStatusButtons">
+      <button class="search-filter-btn active" data-search-status="all">All</button>
+      <button class="search-filter-btn" data-search-status="open">Open only</button>
+      <button class="search-filter-btn" data-search-status="closed">Closed only</button>
+      <button class="search-filter-btn" data-search-status="neutral">Neutral only</button>
+      <button class="search-filter-btn" data-search-status="stale">Stale only</button>
+    </div>
+
+    <div class="search-filter-group">
+      <div class="memory-list-label">People</div>
+      <div id="searchPeopleButtons" class="filter-wrap"></div>
+    </div>
+
+    <div class="search-filter-group">
+      <div class="memory-list-label">Topics</div>
+      <div id="searchTopicButtons" class="filter-wrap"></div>
+    </div>
+
+    <div class="search-filter-group">
+      <div class="memory-list-label">Custom date range</div>
+      <div class="filter-wrap">
+        <label>
+          From:
+          <input type="date" id="searchDateFrom">
+        </label>
+        <label>
+          To:
+          <input type="date" id="searchDateTo">
+        </label>
+        <button id="clearSearchFiltersBtn" type="button" class="search-filter-btn">Clear search filters</button>
+      </div>
+    </div>
+  `;
+
+  const searchParent = searchInput.closest('section') || searchInput.parentElement;
+
+  if (searchParent && searchParent.parentNode) {
+    searchParent.parentNode.insertBefore(panel, searchParent.nextSibling);
+  } else {
+    searchInput.insertAdjacentElement('afterend', panel);
+  }
+
+  const resultsSection = document.createElement('section');
+  resultsSection.id = 'searchResultsSection';
+  resultsSection.className = 'search-results-section';
+  resultsSection.style.display = 'none';
+
+  resultsSection.innerHTML = `
+    <div class="section-header">
+      <h2 id="searchResultsTitle">Search Results</h2>
+      <p id="searchResultsSummary">Use the search box or filters above to find memories.</p>
+    </div>
+    <div id="searchResultsList" class="card-list"></div>
+  `;
+
+  panel.parentNode.insertBefore(resultsSection, panel.nextSibling);
+
+  document.querySelectorAll('[data-search-status]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      searchStatusFilter = btn.dataset.searchStatus || 'all';
+      renderApp();
+    });
+  });
+
+  const fromInput = document.getElementById('searchDateFrom');
+  const toInput = document.getElementById('searchDateTo');
+  const clearBtn = document.getElementById('clearSearchFiltersBtn');
+
+  if (fromInput) {
+    fromInput.addEventListener('change', () => {
+      searchDateFrom = fromInput.value;
+      renderApp();
+    });
+  }
+
+  if (toInput) {
+    toInput.addEventListener('change', () => {
+      searchDateTo = toInput.value;
+      renderApp();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      currentSearchQuery = '';
+      searchStatusFilter = 'all';
+      searchPersonFilter = '';
+      searchTopicFilter = '';
+      searchDateFrom = '';
+      searchDateTo = '';
+
+      if (searchInput) searchInput.value = '';
+      if (fromInput) fromInput.value = '';
+      if (toInput) toInput.value = '';
+
+      renderApp();
+    });
+  }
+}
+
+function renderDynamicSearchButtons() {
+  const peopleWrap = document.getElementById('searchPeopleButtons');
+  const topicsWrap = document.getElementById('searchTopicButtons');
+
+  if (peopleWrap) {
+    const people = getUniqueValues('people');
+
+    if (!people.length) {
+      peopleWrap.innerHTML = `<div class="empty-state">No people tags saved yet.</div>`;
+    } else {
+      peopleWrap.innerHTML = `
+        <button class="search-person-btn ${searchPersonFilter === '' ? 'active' : ''}" data-person="">All people</button>
+        ${people.map(person => `
+          <button class="search-person-btn ${searchPersonFilter === person ? 'active' : ''}" data-person="${escapeHtml(person)}">
+            @${escapeHtml(person)}
+          </button>
+        `).join('')}
+      `;
+
+      peopleWrap.querySelectorAll('[data-person]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          searchPersonFilter = btn.getAttribute('data-person') || '';
+          renderApp();
+        });
+      });
+    }
+  }
+
+  if (topicsWrap) {
+    const topics = getUniqueValues('topics');
+
+    if (!topics.length) {
+      topicsWrap.innerHTML = `<div class="empty-state">No topic tags saved yet.</div>`;
+    } else {
+      topicsWrap.innerHTML = `
+        <button class="search-topic-btn ${searchTopicFilter === '' ? 'active' : ''}" data-topic="">All topics</button>
+        ${topics.map(topic => `
+          <button class="search-topic-btn ${searchTopicFilter === topic ? 'active' : ''}" data-topic="${escapeHtml(topic)}">
+            #${escapeHtml(topic)}
+          </button>
+        `).join('')}
+      `;
+
+      topicsWrap.querySelectorAll('[data-topic]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          searchTopicFilter = btn.getAttribute('data-topic') || '';
+          renderApp();
+        });
+      });
+    }
+  }
+
+  document.querySelectorAll('[data-search-status]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.searchStatus === searchStatusFilter);
+  });
+}
+
+function renderSearchResults() {
+  const section = document.getElementById('searchResultsSection');
+  const title = document.getElementById('searchResultsTitle');
+  const summary = document.getElementById('searchResultsSummary');
+  const list = document.getElementById('searchResultsList');
+
+  if (!section || !title || !summary || !list) return;
+
+  const active = isSearchActive();
+
+  section.style.display = active ? 'block' : 'none';
+
+  if (!active) {
+    list.innerHTML = '';
+    return;
+  }
+
+  const rows = getSearchResultsRows();
+  const queryText = currentSearchQuery.trim();
+
+  title.textContent = 'Search Results';
+
+  const summaryParts = [];
+
+  if (queryText) summaryParts.push(`text contains "${queryText}"`);
+  if (searchStatusFilter !== 'all') summaryParts.push(`status: ${searchStatusFilter}`);
+  if (searchPersonFilter) summaryParts.push(`person: @${searchPersonFilter}`);
+  if (searchTopicFilter) summaryParts.push(`topic: #${searchTopicFilter}`);
+  if (searchDateFrom) summaryParts.push(`from: ${searchDateFrom}`);
+  if (searchDateTo) summaryParts.push(`to: ${searchDateTo}`);
+
+  summary.textContent = `${rows.length} match${rows.length === 1 ? '' : 'es'}${summaryParts.length ? ` — ${summaryParts.join(' | ')}` : ''}`;
+
+  renderList(rows, list, 'No matching memories found.');
 }
 
 // ---------- DASHBOARD ----------
@@ -654,7 +974,7 @@ function renderRecentlyCompleted() {
   const list = document.getElementById('recentlyCompletedList');
   if (!section || !list) return;
 
-  const shouldShowRecentlyCompleted = currentFilter === 'all' || currentFilter === 'closed';
+  const shouldShowRecentlyCompleted = !isSearchActive() && (currentFilter === 'all' || currentFilter === 'closed');
   section.style.display = shouldShowRecentlyCompleted ? 'block' : 'none';
 
   if (!shouldShowRecentlyCompleted) return;
@@ -697,9 +1017,12 @@ function renderStaleOpen() {
   if (!section || !list) return;
 
   const shouldShow =
-    currentFilter === 'all' ||
-    currentFilter === 'open' ||
-    currentFilter === 'stale';
+    !isSearchActive() &&
+    (
+      currentFilter === 'all' ||
+      currentFilter === 'open' ||
+      currentFilter === 'stale'
+    );
 
   section.style.display = shouldShow ? 'block' : 'none';
 
@@ -715,15 +1038,19 @@ function renderStaleOpen() {
 }
 
 function renderApp() {
-  const searchedRows = applySearch(allMemories);
-  const priorityRows = searchedRows.filter(hasOpenActionItems);
-  const filteredRows = sortRowsForCurrentFilter(applyFilter(searchedRows));
+  injectSearchUpgradePanel();
+  renderDynamicSearchButtons();
+
+  const searchActive = isSearchActive();
+
+  const priorityRows = allMemories.filter(hasOpenActionItems);
+  const filteredRows = sortRowsForCurrentFilter(applyFilter(allMemories));
 
   const prioritySection = document.querySelector('.priority-section');
   const allSection = document.querySelector('.all-section');
 
-  const shouldShowPriority = currentFilter === 'all' || currentFilter === 'open';
-  const shouldShowAllSection = currentFilter !== 'stale';
+  const shouldShowPriority = !searchActive && (currentFilter === 'all' || currentFilter === 'open');
+  const shouldShowAllSection = !searchActive && currentFilter !== 'stale';
 
   updateDashboard(allMemories);
 
@@ -734,6 +1061,8 @@ function renderApp() {
   if (allSection) {
     allSection.style.display = shouldShowAllSection ? 'block' : 'none';
   }
+
+  renderSearchResults();
 
   if (shouldShowPriority) {
     renderList(priorityRows, priorityList, 'No open action items found.');
@@ -935,7 +1264,6 @@ async function saveMemory() {
 }
 
 // ---------- SEARCH ----------
-// ---------- SEARCH ----------
 async function runAISearch(query) {
   currentSearchQuery = String(query || '').trim();
   renderApp();
@@ -952,7 +1280,7 @@ async function loadMemories() {
 
   const { data, error } = await supabase
     .from('memories')
-    .select('id, created_at, content, people, topics, action_items, type, is_open_loop, loop_status, closed_at')
+    .select('id, created_at, memory_date, content, people, topics, action_items, type, is_open_loop, loop_status, closed_at')
     .order('created_at', { ascending: false })
     .limit(200);
 
@@ -996,7 +1324,21 @@ if (searchInput) {
 if (refreshBtn) {
   refreshBtn.addEventListener('click', async () => {
     currentFilter = 'all';
+    currentSearchQuery = '';
+    searchStatusFilter = 'all';
+    searchPersonFilter = '';
+    searchTopicFilter = '';
+    searchDateFrom = '';
+    searchDateTo = '';
+
     if (searchInput) searchInput.value = '';
+
+    const fromInput = document.getElementById('searchDateFrom');
+    const toInput = document.getElementById('searchDateTo');
+
+    if (fromInput) fromInput.value = '';
+    if (toInput) toInput.value = '';
+
     await loadMemories();
   });
 }
@@ -1011,4 +1353,5 @@ if (saveBtn) saveBtn.addEventListener('click', saveChanges);
 
 // ---------- INIT ----------
 injectFilterBar();
+injectSearchUpgradePanel();
 loadMemories();
