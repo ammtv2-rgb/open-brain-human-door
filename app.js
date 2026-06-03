@@ -50,6 +50,16 @@ function safeArray(value) {
   return [String(value)];
 }
 
+function uniqueArray(values) {
+  return Array.from(
+    new Set(
+      safeArray(values)
+        .map(value => String(value || '').trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 function formatDate(value) {
   if (!value) return '';
   return new Date(value).toLocaleString();
@@ -225,6 +235,255 @@ function detectOpenLoop(rawText) {
   };
 }
 
+/* ---------- SAFE LOCAL EXTRACTION: NEW MEMORIES ONLY ---------- */
+
+function getKnownPeopleFromExistingMemories() {
+  const knownPeople = new Set([
+    'Drew',
+    'Amanda Jackson',
+    'Rose Walker',
+    'Sam',
+    'Cam Forrey',
+    'Packy'
+  ]);
+
+  allMemories.forEach(row => {
+    safeArray(row.people).forEach(person => {
+      const cleaned = String(person || '').trim();
+      if (cleaned) knownPeople.add(cleaned);
+    });
+  });
+
+  return Array.from(knownPeople);
+}
+
+function extractPeopleLocal(rawText) {
+  const text = String(rawText || '');
+  const found = new Set();
+
+  getKnownPeopleFromExistingMemories().forEach(person => {
+    const escaped = person.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`\\b${escaped}\\b`, 'i');
+
+    if (pattern.test(text)) {
+      found.add(person);
+    }
+  });
+
+  return Array.from(found).slice(0, 8);
+}
+
+function extractTopicsLocal(rawText) {
+  const lower = String(rawText || '').toLowerCase();
+  const topics = new Set();
+
+  const rules = [
+    { topic: 'Open Brain', terms: ['open brain', 'memory system', 'second brain'] },
+    { topic: 'Search', terms: ['search', 'filter', 'results'] },
+    { topic: 'Payroll', terms: ['payroll', 'caregiver pay', 'pay period'] },
+    { topic: 'Scheduling', terms: ['schedule', 'scheduling', 'shift', 'appointment'] },
+    { topic: 'Home Care', terms: ['home care', 'caregiver', 'client', 'hco'] },
+    { topic: 'Gymnia', terms: ['gymnia', 'sugar cravings', 'sweet tooth', 'gymnema'] },
+    { topic: 'VSL', terms: ['vsl', 'sales page', 'funnel page'] },
+    { topic: 'Taxes', terms: ['tax', 'irs', 'franchise tax board', 'ftb'] },
+    { topic: 'Workers Comp', terms: ['workers comp', 'state fund', 'berkshire'] },
+    { topic: 'Finance', terms: ['invoice', 'cash flow', 'deposit', 'transfer', 'balance'] },
+    { topic: 'Marketing', terms: ['ad', 'affiliate', 'copy', 'offer', 'landing page'] },
+    { topic: 'Follow Up', terms: ['follow up', 'call back', 'reach out'] }
+  ];
+
+  rules.forEach(rule => {
+    if (rule.terms.some(term => lower.includes(term))) {
+      topics.add(rule.topic);
+    }
+  });
+
+  const hashtags = String(rawText || '').match(/#[A-Za-z0-9][A-Za-z0-9\s_-]{1,40}/g) || [];
+
+  hashtags.forEach(tag => {
+    const cleaned = tag.replace(/^#/, '').trim();
+    if (cleaned) topics.add(cleaned);
+  });
+
+  return Array.from(topics).slice(0, 10);
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function toISODateOnly(date) {
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function getNextWeekday(dayName) {
+  const days = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6
+  };
+
+  const targetDay = days[String(dayName || '').toLowerCase()];
+  if (targetDay === undefined) return null;
+
+  const today = new Date();
+  const result = new Date(today);
+  let diff = targetDay - today.getDay();
+
+  if (diff <= 0) diff += 7;
+
+  result.setDate(today.getDate() + diff);
+  return result;
+}
+
+function detectDueDateLocal(rawText) {
+  const lower = String(rawText || '').toLowerCase();
+  const today = new Date();
+
+  if (/\btoday\b/.test(lower)) return toISODateOnly(today);
+  if (/\btomorrow\b/.test(lower)) return toISODateOnly(addDays(today, 1));
+
+  const inDaysMatch = lower.match(/\bin\s+(\d{1,2})\s+days?\b/);
+  if (inDaysMatch) {
+    return toISODateOnly(addDays(today, Number(inDaysMatch[1])));
+  }
+
+  const weekdayMatch = lower.match(/\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  if (weekdayMatch) {
+    return toISODateOnly(getNextWeekday(weekdayMatch[2]));
+  }
+
+  const monthMatch = lower.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:,\s*(\d{4}))?\b/i);
+  if (monthMatch) {
+    const month = monthMatch[1];
+    const day = monthMatch[2];
+    const year = monthMatch[3] || today.getFullYear();
+    const parsed = new Date(`${month} ${day}, ${year}`);
+
+    if (!Number.isNaN(parsed.getTime())) {
+      return toISODateOnly(parsed);
+    }
+  }
+
+  const numericDateMatch = lower.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if (numericDateMatch) {
+    const month = Number(numericDateMatch[1]) - 1;
+    const day = Number(numericDateMatch[2]);
+    let year = numericDateMatch[3] ? Number(numericDateMatch[3]) : today.getFullYear();
+
+    if (year < 100) year += 2000;
+
+    const parsed = new Date(year, month, day);
+    if (!Number.isNaN(parsed.getTime())) {
+      return toISODateOnly(parsed);
+    }
+  }
+
+  return null;
+}
+
+function extractActionItemsLocal(rawText) {
+  const text = String(rawText || '').replace(/\s+/g, ' ').trim();
+  if (!text) return [];
+
+  const actionVerbs = [
+    'call',
+    'text',
+    'email',
+    'send',
+    'pay',
+    'schedule',
+    'book',
+    'submit',
+    'review',
+    'finish',
+    'complete',
+    'follow up',
+    'check',
+    'update',
+    'renew',
+    'file',
+    'deposit',
+    'transfer',
+    'ask',
+    'contact'
+  ];
+
+  const pieces = text
+    .split(/(?:\.|\n|;|\band then\b|\bthen\b)/i)
+    .map(piece => piece.trim())
+    .filter(Boolean);
+
+  const actions = [];
+
+  pieces.forEach(piece => {
+    const lower = piece.toLowerCase();
+
+    const hasAction =
+      actionVerbs.some(verb => lower.includes(verb)) ||
+      lower.includes('need to') ||
+      lower.includes('have to') ||
+      lower.includes('must ') ||
+      lower.includes('remind me');
+
+    if (!hasAction) return;
+
+    let cleaned = piece
+      .replace(/^i\s+(need to|have to|must)\s+/i, '')
+      .replace(/^remind me to\s+/i, '')
+      .replace(/^please\s+/i, '')
+      .trim();
+
+    if (cleaned.length > 220) {
+      cleaned = `${cleaned.slice(0, 220).trim()}...`;
+    }
+
+    if (cleaned) actions.push(cleaned);
+  });
+
+  return uniqueArray(actions).slice(0, 8);
+}
+
+function getLocalExtraction(rawText, selectedType) {
+  const people = extractPeopleLocal(rawText);
+  const topics = extractTopicsLocal(rawText);
+  const actionItems = extractActionItemsLocal(rawText);
+  const dueDate = detectDueDateLocal(rawText);
+  const loopFields = detectOpenLoop(rawText);
+
+  let type = selectedType || 'note';
+
+  if (type === 'note' && dueDate) {
+    type = 'reminder';
+  } else if (type === 'note' && actionItems.length > 0) {
+    type = 'task';
+  }
+
+  const loopStatus =
+    loopFields.loop_status === 'neutral' && actionItems.length > 0
+      ? 'open'
+      : loopFields.loop_status;
+
+  return {
+    people,
+    topics,
+    action_items: actionItems,
+    memory_date: dueDate,
+    type,
+    is_open_loop: loopStatus === 'open',
+    loop_status: loopStatus
+  };
+}
+
+/* ---------- SORTING ---------- */
+
 function sortRowsForCurrentFilter(rows) {
   const copiedRows = [...rows];
 
@@ -307,7 +566,8 @@ function applySearchText(rows) {
       ...safeArray(row.people),
       ...safeArray(row.topics),
       ...safeArray(row.action_items),
-      row.loop_status
+      row.loop_status,
+      row.memory_date
     ]
       .join(' ')
       .toLowerCase();
@@ -1183,6 +1443,12 @@ function renderList(rows, targetEl, emptyMessage) {
           </span>
         </div>
 
+        ${
+          row.memory_date
+            ? `<div class="memory-closed-at">Detected date: ${escapeHtml(row.memory_date)}</div>`
+            : ''
+        }
+
         ${closedAtDisplay}
 
         ${
@@ -1455,28 +1721,6 @@ async function deleteMemory(rowId) {
   await loadMemories();
 }
 
-function extractActionItems(rawText) {
-  return String(rawText || '')
-    .split(/\.|,|and/i)
-    .map(s => s.trim())
-    .filter(Boolean)
-    .filter(s => {
-      const lower = s.toLowerCase();
-      return (
-        lower.includes('pay') ||
-        lower.includes('call') ||
-        lower.includes('need') ||
-        lower.includes('deposit') ||
-        lower.includes('transfer') ||
-        lower.includes('follow up') ||
-        lower.includes('schedule') ||
-        lower.includes('review') ||
-        lower.includes('send') ||
-        lower.includes('submit')
-      );
-    });
-}
-
 async function saveMemory() {
   if (!captureInput || !saveMemoryBtn) return;
 
@@ -1486,24 +1730,21 @@ async function saveMemory() {
   saveMemoryBtn.textContent = 'Saving...';
   saveMemoryBtn.disabled = true;
 
-  let detectedType = typeSelect ? typeSelect.value : 'note';
-  const actionItems = extractActionItems(rawText);
-
-  if (actionItems.length > 0 && detectedType === 'note') {
-    detectedType = 'task';
-  }
-
-  const loopFields = detectOpenLoop(rawText);
+  const selectedType = typeSelect ? typeSelect.value : 'note';
+  const extracted = getLocalExtraction(rawText, selectedType);
 
   const payload = {
     content: rawText,
-    type: detectedType,
-    action_items: actionItems,
-    is_open_loop: loopFields.is_open_loop,
-    loop_status: loopFields.loop_status
+    type: extracted.type,
+    people: extracted.people,
+    topics: extracted.topics,
+    action_items: extracted.action_items,
+    memory_date: extracted.memory_date,
+    is_open_loop: extracted.is_open_loop,
+    loop_status: extracted.loop_status
   };
 
-  if (loopFields.loop_status === 'closed') {
+  if (extracted.loop_status === 'closed') {
     payload.closed_at = new Date().toISOString();
   }
 
