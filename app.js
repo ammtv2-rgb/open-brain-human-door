@@ -44,6 +44,7 @@ let searchPersonFilter = '';
 let searchTopicFilter = '';
 let searchDateFrom = '';
 let searchDateTo = '';
+let expandedSearchResultIds = new Set();
 
 // ---------- HELPERS ----------
 function safeArray(value) {
@@ -127,6 +128,31 @@ function isSearchActive() {
     searchDateFrom ||
     searchDateTo
   );
+}
+
+function truncateText(value, maxLength = 280) {
+  const text = String(value || '').trim();
+
+  if (text.length <= maxLength) return text;
+
+  return `${text.slice(0, maxLength).trim()}...`;
+}
+
+function shouldTruncateText(value, maxLength = 280) {
+  return String(value || '').trim().length > maxLength;
+}
+
+function getActiveSearchLabel() {
+  const parts = [];
+
+  if (currentSearchQuery.trim()) parts.push(`Text: "${currentSearchQuery.trim()}"`);
+  if (searchStatusFilter !== 'all') parts.push(`Status: ${searchStatusFilter}`);
+  if (searchPersonFilter) parts.push(`Person: @${searchPersonFilter}`);
+  if (searchTopicFilter) parts.push(`Topic: #${searchTopicFilter}`);
+  if (searchDateFrom) parts.push(`From: ${searchDateFrom}`);
+  if (searchDateTo) parts.push(`To: ${searchDateTo}`);
+
+  return parts.length ? parts.join(' | ') : 'No search filters active';
 }
 
 // ---------- LOOP LOGIC ----------
@@ -483,9 +509,178 @@ function updateMemoryListLabel() {
 }
 
 // ---------- SEARCH UPGRADE UI ----------
+function injectSearchUpgradeStyles() {
+  if (document.getElementById('searchUpgradeStyles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'searchUpgradeStyles';
+
+  style.textContent = `
+    .search-upgrade-panel {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(248, 250, 252, 0.98);
+      backdrop-filter: blur(8px);
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 16px;
+      margin: 18px 0;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .search-results-section {
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 16px;
+      margin: 18px 0;
+      background: #ffffff;
+    }
+
+    .search-filter-details {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-top: 10px;
+      background: #ffffff;
+    }
+
+    .search-filter-details summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .search-filter-details[open] summary {
+      margin-bottom: 10px;
+    }
+
+    .search-filter-btn,
+    .search-person-btn,
+    .search-topic-btn,
+    .compact-toggle-btn {
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      padding: 7px 12px;
+      margin: 3px;
+      background: #ffffff;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    .search-filter-btn.active,
+    .search-person-btn.active,
+    .search-topic-btn.active {
+      background: #0f172a;
+      color: #ffffff;
+      border-color: #0f172a;
+    }
+
+    .search-top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+
+    .active-search-label {
+      font-size: 0.92rem;
+      color: #475569;
+      line-height: 1.4;
+    }
+
+    .compact-result-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+      background: #ffffff;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+    }
+
+    .compact-result-card.open {
+      border-color: #f97316;
+      background: #fffaf5;
+    }
+
+    .compact-result-card.closed {
+      opacity: 0.78;
+      background: #f8fafc;
+    }
+
+    .compact-result-topline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .compact-result-content {
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .compact-result-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .compact-result-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .compact-toggle-btn {
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function resetSearchFilters() {
+  currentSearchQuery = '';
+  searchStatusFilter = 'all';
+  searchPersonFilter = '';
+  searchTopicFilter = '';
+  searchDateFrom = '';
+  searchDateTo = '';
+  expandedSearchResultIds = new Set();
+
+  if (searchInput) searchInput.value = '';
+
+  const fromInput = document.getElementById('searchDateFrom');
+  const toInput = document.getElementById('searchDateTo');
+
+  if (fromInput) fromInput.value = '';
+  if (toInput) toInput.value = '';
+
+  renderApp();
+
+  const panel = document.getElementById('searchUpgradePanel');
+  if (panel) {
+    panel.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }
+}
+
 function injectSearchUpgradePanel() {
   if (!searchInput) return;
   if (document.getElementById('searchUpgradePanel')) return;
+
+  injectSearchUpgradeStyles();
 
   const panel = document.createElement('section');
   panel.id = 'searchUpgradePanel';
@@ -505,18 +700,23 @@ function injectSearchUpgradePanel() {
       <button class="search-filter-btn" data-search-status="stale">Stale only</button>
     </div>
 
-    <div class="search-filter-group">
-      <div class="memory-list-label">People</div>
+    <div class="search-top-actions">
+      <div id="activeSearchLabel" class="active-search-label">No search filters active</div>
+      <button id="clearSearchFiltersTopBtn" type="button" class="search-filter-btn">Clear search filters</button>
+    </div>
+
+    <details class="search-filter-details">
+      <summary>People filters</summary>
       <div id="searchPeopleButtons" class="filter-wrap"></div>
-    </div>
+    </details>
 
-    <div class="search-filter-group">
-      <div class="memory-list-label">Topics</div>
+    <details class="search-filter-details">
+      <summary>Topic filters</summary>
       <div id="searchTopicButtons" class="filter-wrap"></div>
-    </div>
+    </details>
 
-    <div class="search-filter-group">
-      <div class="memory-list-label">Custom date range</div>
+    <details class="search-filter-details">
+      <summary>Custom date range</summary>
       <div class="filter-wrap">
         <label>
           From:
@@ -528,7 +728,7 @@ function injectSearchUpgradePanel() {
         </label>
         <button id="clearSearchFiltersBtn" type="button" class="search-filter-btn">Clear search filters</button>
       </div>
-    </div>
+    </details>
   `;
 
   const searchParent = searchInput.closest('section') || searchInput.parentElement;
@@ -557,17 +757,28 @@ function injectSearchUpgradePanel() {
   document.querySelectorAll('[data-search-status]').forEach(btn => {
     btn.addEventListener('click', () => {
       searchStatusFilter = btn.dataset.searchStatus || 'all';
+      expandedSearchResultIds = new Set();
       renderApp();
+
+      const results = document.getElementById('searchResultsSection');
+      if (results && isSearchActive()) {
+        results.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
     });
   });
 
   const fromInput = document.getElementById('searchDateFrom');
   const toInput = document.getElementById('searchDateTo');
   const clearBtn = document.getElementById('clearSearchFiltersBtn');
+  const clearTopBtn = document.getElementById('clearSearchFiltersTopBtn');
 
   if (fromInput) {
     fromInput.addEventListener('change', () => {
       searchDateFrom = fromInput.value;
+      expandedSearchResultIds = new Set();
       renderApp();
     });
   }
@@ -575,25 +786,17 @@ function injectSearchUpgradePanel() {
   if (toInput) {
     toInput.addEventListener('change', () => {
       searchDateTo = toInput.value;
+      expandedSearchResultIds = new Set();
       renderApp();
     });
   }
 
   if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      currentSearchQuery = '';
-      searchStatusFilter = 'all';
-      searchPersonFilter = '';
-      searchTopicFilter = '';
-      searchDateFrom = '';
-      searchDateTo = '';
+    clearBtn.addEventListener('click', resetSearchFilters);
+  }
 
-      if (searchInput) searchInput.value = '';
-      if (fromInput) fromInput.value = '';
-      if (toInput) toInput.value = '';
-
-      renderApp();
-    });
+  if (clearTopBtn) {
+    clearTopBtn.addEventListener('click', resetSearchFilters);
   }
 }
 
@@ -619,6 +822,7 @@ function renderDynamicSearchButtons() {
       peopleWrap.querySelectorAll('[data-person]').forEach(btn => {
         btn.addEventListener('click', () => {
           searchPersonFilter = btn.getAttribute('data-person') || '';
+          expandedSearchResultIds = new Set();
           renderApp();
         });
       });
@@ -643,14 +847,141 @@ function renderDynamicSearchButtons() {
       topicsWrap.querySelectorAll('[data-topic]').forEach(btn => {
         btn.addEventListener('click', () => {
           searchTopicFilter = btn.getAttribute('data-topic') || '';
+          expandedSearchResultIds = new Set();
           renderApp();
         });
       });
     }
   }
 
+  const activeLabel = document.getElementById('activeSearchLabel');
+  if (activeLabel) {
+    activeLabel.textContent = getActiveSearchLabel();
+  }
+
   document.querySelectorAll('[data-search-status]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.searchStatus === searchStatusFilter);
+  });
+}
+
+function renderCompactSearchList(rows, targetEl, emptyMessage) {
+  if (!targetEl) return;
+
+  if (!rows.length) {
+    targetEl.innerHTML = `<div class="empty-state">${escapeHtml(emptyMessage)}</div>`;
+    return;
+  }
+
+  targetEl.innerHTML = rows.map(row => {
+    const actions = safeArray(row.action_items);
+    const people = safeArray(row.people);
+    const topics = safeArray(row.topics);
+    const status = getEffectiveLoopStatus(row);
+    const rowId = String(row.id);
+    const isExpanded = expandedSearchResultIds.has(rowId);
+    const content = String(row.content || '');
+    const actionText = actions.join(', ');
+    const contentIsLong = shouldTruncateText(content, 320);
+    const actionsAreLong = shouldTruncateText(actionText, 180);
+
+    const displayedContent = isExpanded ? content : truncateText(content, 320);
+    const displayedActions = isExpanded ? actionText : truncateText(actionText, 180);
+
+    const toggleButton =
+      contentIsLong || actionsAreLong
+        ? `<button class="compact-toggle-btn" data-toggle-search-id="${escapeHtml(row.id)}">${isExpanded ? 'Show less' : 'Show full memory'}</button>`
+        : '';
+
+    return `
+      <article class="compact-result-card ${status}">
+        <div class="compact-result-topline">
+          <div>
+            <span class="${badgeClass(row.type)}">${escapeHtml(row.type || 'memory')}</span>
+            <span class="loop-badge loop-${status}">
+              ${status === 'open' ? '🔴 Open' : status === 'closed' ? '🟢 Closed' : '⚪ Neutral'}
+            </span>
+          </div>
+          <span class="memory-date">${escapeHtml(formatDate(row.created_at))}</span>
+        </div>
+
+        <div class="compact-result-content">${escapeHtml(displayedContent)}</div>
+
+        ${
+          people.length || topics.length
+            ? `
+            <div class="compact-result-meta">
+              ${people.map(person => `<span class="meta-chip">@${escapeHtml(person)}</span>`).join('')}
+              ${topics.map(topic => `<span class="meta-chip">#${escapeHtml(topic)}</span>`).join('')}
+            </div>
+            `
+            : ''
+        }
+
+        ${
+          actions.length
+            ? `
+            <div class="action-box" style="line-height:1.5;overflow-wrap:anywhere;word-break:break-word;margin-top:10px;">
+              <strong>Action items:</strong> ${escapeHtml(displayedActions)}
+            </div>
+            `
+            : ''
+        }
+
+        <div class="compact-result-actions">
+          ${toggleButton}
+          ${
+            status === 'open'
+              ? `<button class="card-close-btn" data-close-id="${escapeHtml(row.id)}">Mark Closed</button>`
+              : ''
+          }
+          <button class="card-edit-btn" data-edit-id="${escapeHtml(row.id)}">Edit</button>
+          <button class="card-delete-btn" data-delete-id="${escapeHtml(row.id)}">Delete</button>
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  targetEl.querySelectorAll('[data-toggle-search-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rowId = btn.getAttribute('data-toggle-search-id');
+
+      if (expandedSearchResultIds.has(String(rowId))) {
+        expandedSearchResultIds.delete(String(rowId));
+      } else {
+        expandedSearchResultIds.add(String(rowId));
+      }
+
+      renderApp();
+
+      const section = document.getElementById('searchResultsSection');
+      if (section) {
+        section.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
+    });
+  });
+
+  targetEl.querySelectorAll('[data-edit-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rowId = btn.getAttribute('data-edit-id');
+      openEditor(rowId);
+    });
+  });
+
+  targetEl.querySelectorAll('[data-close-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rowId = btn.getAttribute('data-close-id');
+      await markAsClosed(rowId);
+    });
+  });
+
+  targetEl.querySelectorAll('[data-delete-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rowId = btn.getAttribute('data-delete-id');
+      await deleteMemory(rowId);
+    });
   });
 }
 
@@ -687,7 +1018,7 @@ function renderSearchResults() {
 
   summary.textContent = `${rows.length} match${rows.length === 1 ? '' : 'es'}${summaryParts.length ? ` — ${summaryParts.join(' | ')}` : ''}`;
 
-  renderList(rows, list, 'No matching memories found.');
+  renderCompactSearchList(rows, list, 'No matching memories found.');
 }
 
 // ---------- DASHBOARD ----------
@@ -1266,6 +1597,7 @@ async function saveMemory() {
 // ---------- SEARCH ----------
 async function runAISearch(query) {
   currentSearchQuery = String(query || '').trim();
+  expandedSearchResultIds = new Set();
   renderApp();
 }
 
@@ -1330,6 +1662,7 @@ if (refreshBtn) {
     searchTopicFilter = '';
     searchDateFrom = '';
     searchDateTo = '';
+    expandedSearchResultIds = new Set();
 
     if (searchInput) searchInput.value = '';
 
