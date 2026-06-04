@@ -669,6 +669,10 @@ function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function isPlainWordSearch(query) {
+  return /^[a-z0-9]+$/i.test(String(query || '').trim());
+}
+
 function getSemanticSearchDetails(row, query) {
   const cleanQuery = String(query || '').trim().toLowerCase();
 
@@ -679,30 +683,31 @@ function getSemanticSearchDetails(row, query) {
     };
   }
 
-  const searchableText = getSearchableText(row);
-  const terms = getSemanticSearchTerms(cleanQuery);
+  const contentText = String(row.content || '').toLowerCase();
+  const plainWordSearch = isPlainWordSearch(cleanQuery);
 
   let score = 0;
   const reasons = new Set();
 
-  if (searchableText.includes(cleanQuery)) {
-    score += 500;
-    reasons.add('Exact text match');
-  }
-
-  const contentText = String(row.content || '').toLowerCase();
-
-  if (contentText.includes(cleanQuery)) {
-    score += 300;
-    reasons.add('Content match');
-  }
-
   const exactWordPattern = new RegExp(`\\b${escapeRegExp(cleanQuery)}\\b`, 'i');
 
   if (exactWordPattern.test(contentText)) {
-    score += 200;
-    reasons.add('Exact word match');
+    score += 1000;
+    reasons.add('Exact word in memory');
+  } else if (contentText.includes(cleanQuery)) {
+    score += 700;
+    reasons.add('Text found in memory');
   }
+
+  if (plainWordSearch && score === 0) {
+    return {
+      score: 0,
+      reasons: []
+    };
+  }
+
+  const searchableText = getSearchableText(row);
+  const terms = getSemanticSearchTerms(cleanQuery);
 
   safeArray(row.people).forEach(person => {
     const lowerPerson = String(person).toLowerCase();
