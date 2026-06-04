@@ -665,6 +665,10 @@ function getSearchableText(row) {
     .toLowerCase();
 }
 
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function getSemanticSearchDetails(row, query) {
   const cleanQuery = String(query || '').trim().toLowerCase();
 
@@ -682,40 +686,62 @@ function getSemanticSearchDetails(row, query) {
   const reasons = new Set();
 
   if (searchableText.includes(cleanQuery)) {
-    score += 100;
+    score += 500;
     reasons.add('Exact text match');
   }
 
-  terms.forEach(term => {
-    if (term && searchableText.includes(term)) {
-      score += 10;
+  const contentText = String(row.content || '').toLowerCase();
 
-      if (term !== cleanQuery) {
-        reasons.add(`Related term: ${term}`);
-      }
-    }
-  });
+  if (contentText.includes(cleanQuery)) {
+    score += 300;
+    reasons.add('Content match');
+  }
+
+  const exactWordPattern = new RegExp(`\\b${escapeRegExp(cleanQuery)}\\b`, 'i');
+
+  if (exactWordPattern.test(contentText)) {
+    score += 200;
+    reasons.add('Exact word match');
+  }
 
   safeArray(row.people).forEach(person => {
-    if (String(person).toLowerCase().includes(cleanQuery)) {
-      score += 25;
-      reasons.add(`Person match: @${person}`);
+    const lowerPerson = String(person).toLowerCase();
+
+    if (lowerPerson.includes(cleanQuery)) {
+      score += 80;
+      reasons.add(`Person: @${person}`);
     }
   });
 
   safeArray(row.topics).forEach(topic => {
-    if (String(topic).toLowerCase().includes(cleanQuery)) {
-      score += 25;
-      reasons.add(`Topic match: #${topic}`);
+    const lowerTopic = String(topic).toLowerCase();
+
+    if (lowerTopic.includes(cleanQuery)) {
+      score += 70;
+      reasons.add(`Topic: #${topic}`);
     }
   });
 
   safeArray(row.action_items).forEach(action => {
     if (String(action).toLowerCase().includes(cleanQuery)) {
-      score += 20;
+      score += 40;
       reasons.add('Action item match');
     }
   });
+
+  terms.forEach(term => {
+    if (
+      term &&
+      term !== cleanQuery &&
+      searchableText.includes(term)
+    ) {
+      score += 8;
+    }
+  });
+
+  if (score < 120) {
+    score = 0;
+  }
 
   return {
     score,
