@@ -665,57 +665,85 @@ function getSearchableText(row) {
     .toLowerCase();
 }
 
-function getSemanticSearchScore(row, query) {
+function getSemanticSearchDetails(row, query) {
   const cleanQuery = String(query || '').trim().toLowerCase();
-  if (!cleanQuery) return 1;
+
+  if (!cleanQuery) {
+    return {
+      score: 1,
+      reasons: []
+    };
+  }
 
   const searchableText = getSearchableText(row);
   const terms = getSemanticSearchTerms(cleanQuery);
 
   let score = 0;
+  const reasons = new Set();
 
   if (searchableText.includes(cleanQuery)) {
     score += 100;
+    reasons.add('Exact text match');
   }
 
   terms.forEach(term => {
     if (term && searchableText.includes(term)) {
       score += 10;
+
+      if (term !== cleanQuery) {
+        reasons.add(`Related term: ${term}`);
+      }
     }
   });
 
   safeArray(row.people).forEach(person => {
     if (String(person).toLowerCase().includes(cleanQuery)) {
       score += 25;
+      reasons.add(`Person match: @${person}`);
     }
   });
 
   safeArray(row.topics).forEach(topic => {
     if (String(topic).toLowerCase().includes(cleanQuery)) {
       score += 25;
+      reasons.add(`Topic match: #${topic}`);
     }
   });
 
   safeArray(row.action_items).forEach(action => {
     if (String(action).toLowerCase().includes(cleanQuery)) {
       score += 20;
+      reasons.add('Action item match');
     }
   });
 
-  return score;
+  return {
+    score,
+    reasons: Array.from(reasons).slice(0, 4)
+  };
 }
+
+function getSemanticSearchScore(row, query) {
+  return getSemanticSearchDetails(row, query).score;
+}
+
 
 function applySearchText(rows) {
   const query = String(currentSearchQuery || '').trim().toLowerCase();
 
   if (!query) return rows;
 
-  return rows
-    .map(row => ({
-      ...row,
-      _searchScore: getSemanticSearchScore(row, query)
-    }))
-    .filter(row => row._searchScore > 0);
+return rows
+    .map(row => {
+      const searchDetails = getSemanticSearchDetails(row, query);
+
+      return {
+        ...row,
+        _searchScore: searchDetails.score,
+        _searchReasons: searchDetails.reasons
+      };
+    })
+    .filter(row => row._searchScore > 0); 
 }
 
 function applySearchStatus(rows) {
@@ -1270,6 +1298,7 @@ function renderCompactSearchList(rows, targetEl, emptyMessage) {
 
   targetEl.innerHTML = rows.map(row => {
     const actions = safeArray(row.action_items);
+    const searchReasons = safeArray(row._searchReasons);
     const people = safeArray(row.people);
     const topics = safeArray(row.topics);
     const status = getEffectiveLoopStatus(row);
@@ -1301,6 +1330,15 @@ function renderCompactSearchList(rows, targetEl, emptyMessage) {
         </div>
 
         <div class="compact-result-content">${escapeHtml(displayedContent)}</div>
+        ${
+  searchReasons.length
+    ? `
+    <div class="compact-result-meta">
+      ${searchReasons.map(reason => `<span class="meta-chip">Why: ${escapeHtml(reason)}</span>`).join('')}
+    </div>
+    `
+    : ''
+}
 
         ${
           people.length || topics.length
