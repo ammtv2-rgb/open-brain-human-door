@@ -554,26 +554,168 @@ function applyFilter(rows) {
   return rows;
 }
 
+function getSemanticSearchTerms(query) {
+  const lower = String(query || '').toLowerCase();
+
+  const semanticGroups = [
+    {
+      triggers: ['caregiver', 'caregiver issue', 'staff', 'staffing'],
+      related: [
+        'caregiver',
+        'shift',
+        'missed shift',
+        'no call',
+        'no show',
+        'late',
+        'scheduling',
+        'schedule',
+        'client',
+        'home care',
+        'payroll',
+        'complaint'
+      ]
+    },
+    {
+      triggers: ['payroll', 'pay', 'payment'],
+      related: [
+        'payroll',
+        'pay period',
+        'caregiver pay',
+        'invoice',
+        'cash flow',
+        'deposit',
+        'transfer',
+        'balance',
+        'workers comp'
+      ]
+    },
+    {
+      triggers: ['client', 'home care', 'patient'],
+      related: [
+        'client',
+        'caregiver',
+        'home care',
+        'scheduling',
+        'shift',
+        'care plan',
+        'family',
+        'hospice'
+      ]
+    },
+    {
+      triggers: ['gymnia', 'affiliate', 'marketing'],
+      related: [
+        'gymnia',
+        'affiliate',
+        'clickbank',
+        'offer',
+        'vsl',
+        'sales page',
+        'funnel',
+        'ad',
+        'copy',
+        'landing page'
+      ]
+    },
+    {
+      triggers: ['open brain', 'search', 'memory'],
+      related: [
+        'open brain',
+        'memory',
+        'search',
+        'filter',
+        'supabase',
+        'vercel',
+        'ai',
+        'semantic',
+        'extraction'
+      ]
+    }
+  ];
+
+  const terms = new Set(
+    lower
+      .split(/\s+/)
+      .map(term => term.trim())
+      .filter(Boolean)
+  );
+
+  semanticGroups.forEach(group => {
+    const matched = group.triggers.some(trigger => lower.includes(trigger));
+
+    if (matched) {
+      group.related.forEach(term => terms.add(term));
+    }
+  });
+
+  return Array.from(terms);
+}
+
+function getSearchableText(row) {
+  return [
+    row.content,
+    row.type,
+    ...safeArray(row.people),
+    ...safeArray(row.topics),
+    ...safeArray(row.action_items),
+    row.loop_status,
+    row.memory_date
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
+function getSemanticSearchScore(row, query) {
+  const cleanQuery = String(query || '').trim().toLowerCase();
+  if (!cleanQuery) return 1;
+
+  const searchableText = getSearchableText(row);
+  const terms = getSemanticSearchTerms(cleanQuery);
+
+  let score = 0;
+
+  if (searchableText.includes(cleanQuery)) {
+    score += 100;
+  }
+
+  terms.forEach(term => {
+    if (term && searchableText.includes(term)) {
+      score += 10;
+    }
+  });
+
+  safeArray(row.people).forEach(person => {
+    if (String(person).toLowerCase().includes(cleanQuery)) {
+      score += 25;
+    }
+  });
+
+  safeArray(row.topics).forEach(topic => {
+    if (String(topic).toLowerCase().includes(cleanQuery)) {
+      score += 25;
+    }
+  });
+
+  safeArray(row.action_items).forEach(action => {
+    if (String(action).toLowerCase().includes(cleanQuery)) {
+      score += 20;
+    }
+  });
+
+  return score;
+}
+
 function applySearchText(rows) {
   const query = String(currentSearchQuery || '').trim().toLowerCase();
 
   if (!query) return rows;
 
-  return rows.filter(row => {
-    const searchableText = [
-      row.content,
-      row.type,
-      ...safeArray(row.people),
-      ...safeArray(row.topics),
-      ...safeArray(row.action_items),
-      row.loop_status,
-      row.memory_date
-    ]
-      .join(' ')
-      .toLowerCase();
-
-    return searchableText.includes(query);
-  });
+  return rows
+    .map(row => ({
+      ...row,
+      _searchScore: getSemanticSearchScore(row, query)
+    }))
+    .filter(row => row._searchScore > 0);
 }
 
 function applySearchStatus(rows) {
@@ -639,9 +781,24 @@ function getSearchResultsRows() {
   rows = applySearchTopic(rows);
   rows = applySearchDateRange(rows);
 
+  const query = String(currentSearchQuery || '').trim();
+
+  if (query) {
+    return [...rows].sort((a, b) => {
+      const scoreA = a._searchScore || 0;
+      const scoreB = b._searchScore || 0;
+
+      if (scoreB !== scoreA) return scoreB - scoreA;
+
+      const aTime = new Date(a.created_at).getTime() || 0;
+      const bTime = new Date(b.created_at).getTime() || 0;
+
+      return bTime - aTime;
+    });
+  }
+
   return sortRowsNewestFirst(rows);
 }
-
 function getUniqueValues(fieldName) {
   const values = new Set();
 
